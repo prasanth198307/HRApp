@@ -14,6 +14,10 @@ export const industryEnum = pgEnum("industry", [
 ]);
 export const attendanceStatusEnum = pgEnum("attendance_status", ["present", "absent", "half_day", "leave", "holiday"]);
 export const employmentStatusEnum = pgEnum("employment_status", ["active", "exited", "on_notice"]);
+export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
+export const leaveTypeEnum = pgEnum("leave_type", ["annual", "sick", "personal", "maternity", "paternity", "unpaid", "other"]);
+export const notificationTypeEnum = pgEnum("notification_type", ["leave_request", "leave_approved", "leave_rejected", "onboarding_task", "task_completed", "general"]);
+export const onboardingTaskStatusEnum = pgEnum("onboarding_task_status", ["pending", "in_progress", "completed"]);
 
 // Organizations table
 export const organizations = pgTable("organizations", {
@@ -102,6 +106,49 @@ export const holidays = pgTable("holidays", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Leave Requests table
+export const leaveRequests = pgTable("leave_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  leaveType: leaveTypeEnum("leave_type").notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  reason: text("reason"),
+  status: leaveStatusEnum("status").notNull().default("pending"),
+  reviewedBy: varchar("reviewed_by").references(() => appUsers.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Onboarding Tasks table
+export const onboardingTasks = pgTable("onboarding_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: date("due_date"),
+  status: onboardingTaskStatusEnum("status").notNull().default("pending"),
+  assignedTo: varchar("assigned_to").references(() => appUsers.id),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => appUsers.id),
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  type: notificationTypeEnum("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  relatedId: varchar("related_id"),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   employees: many(employees),
@@ -156,6 +203,47 @@ export const holidaysRelations = relations(holidays, ({ one }) => ({
   }),
 }));
 
+export const leaveRequestsRelations = relations(leaveRequests, ({ one }) => ({
+  employee: one(employees, {
+    fields: [leaveRequests.employeeId],
+    references: [employees.id],
+  }),
+  organization: one(organizations, {
+    fields: [leaveRequests.organizationId],
+    references: [organizations.id],
+  }),
+  reviewer: one(appUsers, {
+    fields: [leaveRequests.reviewedBy],
+    references: [appUsers.id],
+  }),
+}));
+
+export const onboardingTasksRelations = relations(onboardingTasks, ({ one }) => ({
+  employee: one(employees, {
+    fields: [onboardingTasks.employeeId],
+    references: [employees.id],
+  }),
+  organization: one(organizations, {
+    fields: [onboardingTasks.organizationId],
+    references: [organizations.id],
+  }),
+  assignee: one(appUsers, {
+    fields: [onboardingTasks.assignedTo],
+    references: [appUsers.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(appUsers, {
+    fields: [notifications.userId],
+    references: [appUsers.id],
+  }),
+  organization: one(organizations, {
+    fields: [notifications.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
 // Insert Schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -187,6 +275,23 @@ export const insertHolidaySchema = createInsertSchema(holidays).omit({
   createdAt: true,
 });
 
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
+  id: true,
+  createdAt: true,
+  reviewedAt: true,
+});
+
+export const insertOnboardingTaskSchema = createInsertSchema(onboardingTasks).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
@@ -205,6 +310,15 @@ export type Payslip = typeof payslips.$inferSelect;
 
 export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 export type Holiday = typeof holidays.$inferSelect;
+
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+
+export type InsertOnboardingTask = z.infer<typeof insertOnboardingTaskSchema>;
+export type OnboardingTask = typeof onboardingTasks.$inferSelect;
+
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
 
 // Industry options for frontend
 export const industryOptions = [
@@ -232,4 +346,26 @@ export const employmentStatusOptions = [
   { value: "active", label: "Active" },
   { value: "exited", label: "Exited" },
   { value: "on_notice", label: "On Notice" },
+] as const;
+
+export const leaveTypeOptions = [
+  { value: "annual", label: "Annual Leave" },
+  { value: "sick", label: "Sick Leave" },
+  { value: "personal", label: "Personal Leave" },
+  { value: "maternity", label: "Maternity Leave" },
+  { value: "paternity", label: "Paternity Leave" },
+  { value: "unpaid", label: "Unpaid Leave" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const leaveStatusOptions = [
+  { value: "pending", label: "Pending", color: "yellow" },
+  { value: "approved", label: "Approved", color: "green" },
+  { value: "rejected", label: "Rejected", color: "red" },
+] as const;
+
+export const onboardingTaskStatusOptions = [
+  { value: "pending", label: "Pending", color: "gray" },
+  { value: "in_progress", label: "In Progress", color: "blue" },
+  { value: "completed", label: "Completed", color: "green" },
 ] as const;
