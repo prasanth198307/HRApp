@@ -1,0 +1,123 @@
+# HR Manager - Multi-Tenant HR Management System
+
+## Overview
+A comprehensive multi-tenant HR management application with three user roles (Super Admin, Org Admin, Employee). Features include organization management, employee lifecycle tracking, attendance management, payslip uploads and distribution, holiday calendar management with industry-based defaults and customization, monthly attendance reports, and role-based access control.
+
+## Architecture
+
+### Tech Stack
+- **Frontend**: React with TypeScript, Vite, TailwindCSS, Shadcn UI
+- **Backend**: Express.js with TypeScript
+- **Database**: PostgreSQL with Drizzle ORM
+- **Authentication**: Replit Auth (OIDC)
+- **State Management**: TanStack Query
+
+### Key Features
+1. **Multi-Tenant Architecture**: Complete data isolation between organizations
+2. **Role-Based Access Control**:
+   - Super Admin: Manage all organizations, set default holidays
+   - Org Admin: Manage employees, attendance, payslips, holidays
+   - Employee: View personal dashboard, attendance, payslips, holidays
+3. **Employee Lifecycle**: Full tracking from onboarding to exit
+4. **Attendance Management**: Monthly tracking with visual calendar
+5. **Payslip System**: Upload and distribute payslips
+6. **Holiday Calendar**: Industry-specific defaults plus custom organization holidays
+
+## Project Structure
+
+```
+├── client/src/
+│   ├── App.tsx                    # Main app with routing
+│   ├── components/
+│   │   ├── app-sidebar.tsx        # Role-based navigation sidebar
+│   │   ├── theme-toggle.tsx       # Dark/light mode toggle
+│   │   └── ui/                    # Shadcn UI components
+│   ├── lib/
+│   │   ├── theme-provider.tsx     # Theme context provider
+│   │   ├── user-context.tsx       # User role context
+│   │   └── queryClient.ts         # API request utilities
+│   ├── pages/
+│   │   ├── landing.tsx            # Public landing page
+│   │   ├── super-admin/           # Super admin pages
+│   │   │   ├── dashboard.tsx
+│   │   │   ├── organizations.tsx
+│   │   │   └── default-holidays.tsx
+│   │   ├── org-admin/             # Organization admin pages
+│   │   │   ├── dashboard.tsx
+│   │   │   ├── employees.tsx
+│   │   │   ├── attendance.tsx
+│   │   │   ├── payslips.tsx
+│   │   │   ├── holidays.tsx
+│   │   │   ├── reports.tsx
+│   │   │   └── user-accounts.tsx
+│   │   └── employee/              # Employee pages
+│   │       ├── dashboard.tsx
+│   │       ├── my-attendance.tsx
+│   │       ├── my-payslips.tsx
+│   │       └── holidays.tsx
+│   └── hooks/
+│       └── use-auth.ts            # Authentication hook
+├── server/
+│   ├── index.ts                   # Express server setup
+│   ├── routes.ts                  # API endpoints
+│   ├── storage.ts                 # Database operations
+│   └── db.ts                      # Database connection
+└── shared/
+    └── schema.ts                  # Database schema & types
+```
+
+## Database Schema
+
+### Tables
+- **organizations**: Multi-tenant organizations with industry classification
+- **app_users**: User accounts linked to auth and organization
+- **employees**: Employee records with full lifecycle data
+- **attendance**: Daily attendance tracking
+- **payslips**: Uploaded payslip files
+- **holidays**: Both default (industry-specific) and custom organization holidays
+
+## API Endpoints
+
+### Super Admin
+- `GET /api/admin/stats` - Dashboard statistics
+- `GET/POST /api/organizations` - Manage organizations
+- `PATCH /api/organizations/:id` - Update organization
+- `POST /api/org-admins` - Create org admin account
+- `GET/POST/PATCH/DELETE /api/admin/holidays` - Default holidays
+
+### Organization Admin
+- `GET /api/org/stats` - Organization statistics
+- `GET/POST /api/employees` - Employee management
+- `PATCH /api/employees/:id` - Update employee
+- `POST /api/employees/:id/exit` - Record employee exit
+- `GET /api/attendance` - Get attendance records
+- `POST /api/attendance/bulk` - Bulk update attendance
+- `GET/POST /api/payslips` - Payslip management
+- `POST /api/payslips/upload` - Upload payslip file
+- `GET/POST/PATCH/DELETE /api/holidays` - Organization holidays
+- `GET/POST/PATCH /api/user-accounts` - Employee account management
+
+### Employee
+- `GET /api/employee/stats` - Personal statistics
+- `GET /api/employee/attendance` - Personal attendance
+- `GET /api/employee/payslips` - Personal payslips
+
+## Running the Application
+
+```bash
+npm run dev          # Start development server
+npm run db:push      # Push database schema changes
+```
+
+## User Preferences
+- Dark mode support with theme persistence
+- Responsive design for all screen sizes
+
+## Recent Changes
+- Initial implementation of complete HR management system
+- Multi-tenant architecture with PostgreSQL
+- Role-based access control system
+- Employee management with lifecycle tracking
+- Attendance tracking with monthly calendar view
+- Payslip upload and download functionality
+- Industry-based holiday calendar with customization

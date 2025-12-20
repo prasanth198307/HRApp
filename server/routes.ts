@@ -1,16 +1,576 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
+import type { AppUser } from "@shared/schema";
+
+declare global {
+  namespace Express {
+    interface Request {
+      appUser?: AppUser & { organization?: any };
+    }
+  }
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "uploads", "payslips");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + "-" + file.originalname);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [".pdf", ".doc", ".docx"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF and DOC files are allowed"));
+    }
+  },
+});
+
+async function appUserMiddleware(req: Request, res: Response, next: NextFunction) {
+  const user = (req as any).user;
+  if (!user) {
+    return next();
+  }
+
+  try {
+    let appUser = await storage.getAppUserByAuthId(user.id);
+    
+    if (!appUser) {
+      const allUsers = await storage.getAllAppUsers();
+      if (allUsers.length === 0) {
+        appUser = await storage.createAppUser({
+          authUserId: user.id,
+          role: "super_admin",
+          isActive: true,
+        });
+      } else if (user.email) {
+        const pendingUser = await storage.getAppUserByInviteEmail(user.email);
+        if (pendingUser) {
+          appUser = await storage.updateAppUser(pendingUser.id, {
+            authUserId: user.id,
+            inviteEmail: null,
+          });
+        }
+      }
+    }
+
+    if (appUser) {
+      let organization = null;
+      if (appUser.organizationId) {
+        organization = await storage.getOrganization(appUser.organizationId);
+      }
+      req.appUser = { ...appUser, organization };
+    }
+  } catch (error) {
+    console.error("Error in appUserMiddleware:", error);
+  }
+  
+  next();
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.appUser) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+}
+
+function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.appUser || req.appUser.role !== "super_admin") {
+    return res.status(403).json({ message: "Forbidden - Super Admin required" });
+  }
+  next();
+}
+
+function requireOrgAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.appUser || (req.appUser.role !== "org_admin" && req.appUser.role !== "super_admin")) {
+    return res.status(403).json({ message: "Forbidden - Org Admin required" });
+  }
+  next();
+}
+
+function requireOrgMember(req: Request, res: Response, next: NextFunction) {
+  if (!req.appUser || !req.appUser.organizationId) {
+    return res.status(403).json({ message: "Forbidden - Organization membership required" });
+  }
+  next();
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  app.use(appUserMiddleware);
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  app.get("/api/user/context", requireAuth, async (req, res) => {
+    res.json({
+      appUser: req.appUser,
+      organization: req.appUser?.organization || null,
+    });
+  });
+
+  app.get("/api/admin/stats", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getSuperAdminStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/organizations", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const orgs = await storage.getOrganizations();
+      res.json(orgs);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/organizations", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const org = await storage.createOrganization(req.body);
+      res.status(201).json(org);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/organizations/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const org = await storage.updateOrganization(req.params.id, req.body);
+      if (!org) {
+        return res.status(404).json({ message: "Organization not found" });
+      }
+      res.json(org);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/org-admins", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { organizationId, email } = req.body;
+      
+      if (!email || !organizationId) {
+        return res.status(400).json({ message: "Email and organization are required" });
+      }
+      
+      const existingByEmail = await storage.getAppUserByInviteEmail(email);
+      if (existingByEmail) {
+        return res.status(400).json({ message: "An invitation already exists for this email" });
+      }
+      
+      const appUser = await storage.createAppUser({
+        authUserId: `pending_${Date.now()}`,
+        inviteEmail: email.toLowerCase(),
+        organizationId,
+        role: "org_admin",
+        isActive: true,
+      });
+      
+      res.status(201).json(appUser);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/holidays", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const holidayList = await storage.getDefaultHolidays();
+      res.json(holidayList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/holidays", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const holiday = await storage.createHoliday({
+        ...req.body,
+        organizationId: null,
+        isCustom: false,
+      });
+      res.status(201).json(holiday);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/holidays/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const holiday = await storage.updateHoliday(req.params.id, req.body);
+      if (!holiday) {
+        return res.status(404).json({ message: "Holiday not found" });
+      }
+      res.json(holiday);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/holidays/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      await storage.deleteHoliday(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/org/stats", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const stats = await storage.getOrgStats(req.appUser!.organizationId!);
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employees", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const emps = await storage.getEmployeesByOrg(req.appUser!.organizationId!);
+      res.json(emps);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/employees", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const emp = await storage.createEmployee({
+        ...req.body,
+        organizationId: req.appUser!.organizationId!,
+      });
+      res.status(201).json(emp);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/employees/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getEmployee(req.params.id);
+      if (!existing || existing.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      const emp = await storage.updateEmployee(req.params.id, req.body);
+      res.json(emp);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/employees/:id/exit", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getEmployee(req.params.id);
+      if (!existing || existing.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      const emp = await storage.updateEmployee(req.params.id, {
+        dateOfExit: req.body.dateOfExit,
+        exitReason: req.body.exitReason,
+        status: "exited",
+      });
+      res.json(emp);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  const monthFormatRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+  app.get("/api/attendance", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const month = req.query.month as string || new Date().toISOString().slice(0, 7);
+      if (!monthFormatRegex.test(month)) {
+        return res.status(400).json({ message: "Invalid month format. Use YYYY-MM" });
+      }
+      const records = await storage.getAttendanceByOrg(req.appUser!.organizationId!, month);
+      res.json(records);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/attendance/bulk", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const { records } = req.body;
+      const orgId = req.appUser!.organizationId!;
+      
+      const enrichedRecords = records.map((r: any) => ({
+        ...r,
+        organizationId: orgId,
+      }));
+
+      await storage.createOrUpdateAttendance(enrichedRecords);
+      res.status(200).json({ message: "Attendance saved" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/payslips", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const payslipList = await storage.getPayslipsByOrg(req.appUser!.organizationId!);
+      const emps = await storage.getEmployeesByOrg(req.appUser!.organizationId!);
+      
+      const enriched = payslipList.map(p => ({
+        ...p,
+        employee: emps.find(e => e.id === p.employeeId),
+      }));
+      
+      res.json(enriched);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/payslips/upload", requireAuth, requireOrgAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const { employeeId, month, year } = req.body;
+      
+      const emp = await storage.getEmployee(employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(400).json({ message: "Invalid employee" });
+      }
+
+      const payslip = await storage.createPayslip({
+        employeeId,
+        organizationId: req.appUser!.organizationId!,
+        month: parseInt(month),
+        year: parseInt(year),
+        fileName: req.file.originalname,
+        fileUrl: `/uploads/payslips/${req.file.filename}`,
+        fileSize: req.file.size,
+      });
+
+      res.status(201).json(payslip);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/payslips/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const payslip = await storage.getPayslip(req.params.id);
+      if (!payslip || payslip.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Payslip not found" });
+      }
+      await storage.deletePayslip(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/holidays", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const org = req.appUser!.organization;
+      const holidayList = await storage.getHolidaysByOrg(
+        req.appUser!.organizationId!,
+        org?.industry
+      );
+      res.json(holidayList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/holidays/upcoming", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const org = req.appUser!.organization;
+      const holidayList = await storage.getUpcomingHolidays(
+        req.appUser!.organizationId!,
+        org?.industry
+      );
+      res.json(holidayList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/holidays", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const holiday = await storage.createHoliday({
+        ...req.body,
+        organizationId: req.appUser!.organizationId!,
+        isCustom: true,
+      });
+      res.status(201).json(holiday);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/holidays/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getHoliday(req.params.id);
+      if (!existing || existing.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Holiday not found" });
+      }
+      const holiday = await storage.updateHoliday(req.params.id, req.body);
+      res.json(holiday);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/holidays/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getHoliday(req.params.id);
+      if (!existing || existing.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Holiday not found" });
+      }
+      await storage.deleteHoliday(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/user-accounts", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
+      const emps = await storage.getEmployeesByOrg(req.appUser!.organizationId!);
+      
+      const enriched = users.filter(u => u.role === "employee").map(u => ({
+        ...u,
+        employee: emps.find(e => e.id === u.employeeId),
+      }));
+      
+      res.json(enriched);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/user-accounts", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const { employeeId } = req.body;
+      
+      const emp = await storage.getEmployee(employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(400).json({ message: "Invalid employee" });
+      }
+
+      const existingUsers = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
+      if (existingUsers.some(u => u.employeeId === employeeId)) {
+        return res.status(400).json({ message: "User account already exists for this employee" });
+      }
+
+      const existingByEmail = await storage.getAppUserByInviteEmail(emp.email);
+      if (existingByEmail) {
+        return res.status(400).json({ message: "An invitation already exists for this email" });
+      }
+
+      const user = await storage.createAppUser({
+        authUserId: `pending_${Date.now()}`,
+        inviteEmail: emp.email.toLowerCase(),
+        organizationId: req.appUser!.organizationId!,
+        role: "employee",
+        employeeId,
+        isActive: true,
+      });
+
+      res.status(201).json(user);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/user-accounts/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const user = await storage.updateAppUser(req.params.id, req.body);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employee/stats", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json({
+          presentThisMonth: 0,
+          absentThisMonth: 0,
+          leaveThisMonth: 0,
+          totalPayslips: 0,
+        });
+      }
+      const stats = await storage.getEmployeeStats(req.appUser!.employeeId);
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employee/attendance", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const month = req.query.month as string;
+      const records = await storage.getAttendanceByEmployee(req.appUser!.employeeId, month);
+      res.json(records);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employee/attendance/recent", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const records = await storage.getAttendanceByEmployee(req.appUser!.employeeId);
+      res.json(records.slice(0, 10));
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employee/payslips", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const payslipList = await storage.getPayslipsByEmployee(req.appUser!.employeeId);
+      res.json(payslipList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.use("/uploads", (req, res, next) => {
+    if (!req.appUser) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    next();
+  });
 
   return httpServer;
 }
