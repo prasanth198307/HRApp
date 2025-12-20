@@ -31,9 +31,10 @@ export const organizations = pgTable("organizations", {
 // App Users (extends auth users with role and org)
 export const appUsers = pgTable("app_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  authUserId: varchar("auth_user_id").notNull(),
+  authUserId: varchar("auth_user_id"),
   inviteEmail: varchar("invite_email"),
   inviteToken: varchar("invite_token"),
+  isPending: boolean("is_pending").notNull().default(false),
   organizationId: varchar("organization_id").references(() => organizations.id),
   role: userRoleEnum("role").notNull().default("employee"),
   employeeId: varchar("employee_id"),

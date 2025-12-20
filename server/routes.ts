@@ -3,8 +3,13 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { storage } from "./storage";
 import type { AppUser } from "@shared/schema";
+
+function generateInviteToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
 
 declare global {
   namespace Express {
@@ -57,14 +62,6 @@ async function appUserMiddleware(req: Request, res: Response, next: NextFunction
           role: "super_admin",
           isActive: true,
         });
-      } else if (user.email) {
-        const pendingUser = await storage.getAppUserByInviteEmail(user.email);
-        if (pendingUser) {
-          appUser = await storage.updateAppUser(pendingUser.id, {
-            authUserId: user.id,
-            inviteEmail: null,
-          });
-        }
       }
     }
 
@@ -123,6 +120,69 @@ export async function registerRoutes(
     });
   });
 
+  app.get("/api/invite/check", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) {
+        return res.status(400).json({ message: "Token is required" });
+      }
+
+      const pendingUser = await storage.getAppUserByInviteToken(token);
+      if (!pendingUser || !pendingUser.isPending) {
+        return res.status(404).json({ message: "Invalid or expired invitation" });
+      }
+
+      res.json({
+        email: pendingUser.inviteEmail,
+        role: pendingUser.role,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/invite/accept", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        return res.status(401).json({ message: "You must be logged in to accept an invitation" });
+      }
+
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ message: "Invitation token is required" });
+      }
+
+      const pendingUser = await storage.getAppUserByInviteToken(token);
+      if (!pendingUser || !pendingUser.isPending) {
+        return res.status(404).json({ message: "Invalid or expired invitation" });
+      }
+
+      if (pendingUser.inviteEmail?.toLowerCase() !== user.email?.toLowerCase()) {
+        return res.status(403).json({ 
+          message: "This invitation was sent to a different email address. Please log in with the correct account." 
+        });
+      }
+
+      const existingUser = await storage.getAppUserByAuthId(user.id);
+      if (existingUser) {
+        return res.status(400).json({ message: "You already have an account" });
+      }
+
+      const updatedUser = await storage.updateAppUser(pendingUser.id, {
+        authUserId: user.id,
+        inviteEmail: null,
+        inviteToken: null,
+        isPending: false,
+        isActive: true,
+      });
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/admin/stats", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const stats = await storage.getSuperAdminStats();
@@ -174,16 +234,19 @@ export async function registerRoutes(
       if (existingByEmail) {
         return res.status(400).json({ message: "An invitation already exists for this email" });
       }
+
+      const inviteToken = generateInviteToken();
       
       const appUser = await storage.createAppUser({
-        authUserId: `pending_${Date.now()}`,
         inviteEmail: email.toLowerCase(),
+        inviteToken,
+        isPending: true,
         organizationId,
         role: "org_admin",
-        isActive: true,
+        isActive: false,
       });
       
-      res.status(201).json(appUser);
+      res.status(201).json({ ...appUser, inviteToken });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -484,16 +547,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "An invitation already exists for this email" });
       }
 
+      const inviteToken = generateInviteToken();
+
       const user = await storage.createAppUser({
-        authUserId: `pending_${Date.now()}`,
         inviteEmail: emp.email.toLowerCase(),
+        inviteToken,
+        isPending: true,
         organizationId: req.appUser!.organizationId!,
         role: "employee",
         employeeId,
-        isActive: true,
+        isActive: false,
       });
 
-      res.status(201).json(user);
+      res.status(201).json({ ...user, inviteToken });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

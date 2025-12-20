@@ -31,6 +31,7 @@ export interface IStorage {
   // App Users
   getAppUserByAuthId(authUserId: string): Promise<AppUser | undefined>;
   getAppUserByInviteEmail(email: string): Promise<AppUser | undefined>;
+  getAppUserByInviteToken(token: string): Promise<AppUser | undefined>;
   getAppUsersByOrg(organizationId: string): Promise<AppUser[]>;
   getAllAppUsers(): Promise<AppUser[]>;
   createAppUser(user: InsertAppUser): Promise<AppUser>;
@@ -118,7 +119,17 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(appUsers).where(
       and(
         eq(appUsers.inviteEmail, email.toLowerCase()),
-        sql`${appUsers.authUserId} LIKE 'pending_%'`
+        eq(appUsers.isPending, true)
+      )
+    );
+    return user;
+  }
+
+  async getAppUserByInviteToken(token: string): Promise<AppUser | undefined> {
+    const [user] = await db.select().from(appUsers).where(
+      and(
+        eq(appUsers.inviteToken, token),
+        eq(appUsers.isPending, true)
       )
     );
     return user;
