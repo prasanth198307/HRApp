@@ -45,7 +45,7 @@ export default function Landing() {
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-primary to-primary/70 text-primary-foreground">
               <Zap className="h-5 w-5" />
             </div>
-            <span className="text-xl font-bold tracking-tight">HR Manager</span>
+            <span className="text-xl font-bold tracking-tight">Crew<span className="text-primary">ly</span></span>
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
@@ -146,7 +146,7 @@ export default function Landing() {
       <footer className="border-t py-8">
         <div className="container mx-auto flex flex-wrap items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
           <Zap className="h-4 w-4" />
-          <p>HR Manager - People First. Paperwork Never.</p>
+          <p>Crewly - People First. Paperwork Never.</p>
         </div>
       </footer>
     </div>
