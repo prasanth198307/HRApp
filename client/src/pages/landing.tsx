@@ -1,38 +1,38 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Building2, Users, Calendar, FileText, Shield, BarChart3 } from "lucide-react";
+import { Building2, Users, Calendar, FileText, Shield, BarChart3, Zap, Sparkles, Rocket } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const features = [
   {
     icon: Building2,
-    title: "Multi-Tenant",
-    description: "Manage multiple organizations with complete data isolation",
+    title: "Multi-Tenant Magic",
+    description: "Run multiple organizations like a boss with bulletproof data isolation",
   },
   {
     icon: Users,
-    title: "Employee Management",
-    description: "Complete employee lifecycle from onboarding to exit",
+    title: "People Power",
+    description: "From hello to goodbye - manage the complete employee journey",
   },
   {
     icon: Calendar,
-    title: "Attendance Tracking",
-    description: "Track daily attendance with detailed reports",
+    title: "Attendance Ace",
+    description: "Who's in? Who's out? Know it all with smart tracking",
   },
   {
     icon: FileText,
-    title: "Payslip Management",
-    description: "Upload and distribute payslips securely",
+    title: "Payslip Paradise",
+    description: "Upload, distribute, done - payslips made painless",
   },
   {
     icon: Shield,
-    title: "Role-Based Access",
-    description: "Super Admin, Org Admin, and Employee roles",
+    title: "Access Control",
+    description: "Right people, right access - Super Admin to Employee roles",
   },
   {
     icon: BarChart3,
-    title: "Reports & Analytics",
-    description: "Generate comprehensive attendance reports",
+    title: "Insights Galore",
+    description: "Reports that actually make sense and drive decisions",
   },
 ];
 
@@ -40,12 +40,12 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <div className="container mx-auto flex h-16 items-center justify-between gap-4 px-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Building2 className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-primary to-primary/70 text-primary-foreground">
+              <Zap className="h-5 w-5" />
             </div>
-            <span className="text-xl font-semibold">HR Manager</span>
+            <span className="text-xl font-bold tracking-tight">HR Manager</span>
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
@@ -57,18 +57,32 @@ export default function Landing() {
       </header>
 
       <main>
-        <section className="py-20 md:py-32">
+        <section className="relative overflow-hidden py-20 md:py-32">
+          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-4xl font-bold tracking-tight md:text-6xl" data-testid="text-hero-title">
-              HR Management Made Simple
+            <div className="mx-auto mb-6 flex items-center justify-center gap-2 rounded-full bg-primary/10 px-4 py-2 w-fit">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-primary">HR that doesn't suck</span>
+            </div>
+            <h1 className="text-4xl font-extrabold tracking-tight md:text-6xl lg:text-7xl" data-testid="text-hero-title">
+              <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text">
+                People First.
+              </span>
+              <br />
+              <span className="bg-gradient-to-r from-primary via-primary to-primary/70 bg-clip-text text-transparent">
+                Paperwork Never.
+              </span>
             </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground" data-testid="text-hero-description">
-              A comprehensive multi-tenant HR solution for managing employees, attendance, 
-              payslips, and holidays across multiple organizations.
+            <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl" data-testid="text-hero-description">
+              The HR platform that gets out of your way. Manage teams, track attendance, 
+              distribute payslips, and stay organized - all in one funky dashboard.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <Button size="lg" asChild data-testid="button-get-started">
-                <a href="/api/login">Get Started</a>
+              <Button size="lg" className="gap-2" asChild data-testid="button-get-started">
+                <a href="/api/login">
+                  <Rocket className="h-4 w-4" />
+                  Let's Go
+                </a>
               </Button>
             </div>
           </div>
@@ -76,17 +90,19 @@ export default function Landing() {
 
         <section className="border-t bg-muted/30 py-20">
           <div className="container mx-auto px-4">
-            <h2 className="text-center text-3xl font-bold" data-testid="text-features-title">
-              Everything You Need
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-center text-muted-foreground">
-              Powerful features designed for modern HR teams
-            </p>
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="text-3xl font-bold md:text-4xl" data-testid="text-features-title">
+                All the Good Stuff
+              </h2>
+              <p className="mt-4 text-muted-foreground">
+                Packed with features that make HR teams actually happy
+              </p>
+            </div>
             <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {features.map((feature, index) => (
-                <Card key={index} className="hover-elevate">
+                <Card key={index} className="group hover-elevate transition-all duration-300">
                   <CardContent className="flex flex-col items-start p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                       <feature.icon className="h-6 w-6" />
                     </div>
                     <h3 className="mt-4 text-lg font-semibold">{feature.title}</h3>
@@ -101,21 +117,36 @@ export default function Landing() {
         </section>
 
         <section className="py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl font-bold">Ready to Get Started?</h2>
-            <p className="mt-4 text-muted-foreground">
-              Sign in to access your HR dashboard
-            </p>
-            <Button size="lg" className="mt-8" asChild data-testid="button-cta-login">
-              <a href="/api/login">Sign In Now</a>
-            </Button>
+          <div className="container mx-auto px-4">
+            <div className="relative mx-auto max-w-3xl overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-8 text-center text-primary-foreground md:p-12">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.1),transparent_50%)]" />
+              <div className="relative">
+                <h2 className="text-3xl font-bold md:text-4xl">Ready to Rock?</h2>
+                <p className="mt-4 text-primary-foreground/80">
+                  Join the HR revolution. Your team will thank you.
+                </p>
+                <Button 
+                  size="lg" 
+                  variant="secondary" 
+                  className="mt-8 gap-2" 
+                  asChild 
+                  data-testid="button-cta-login"
+                >
+                  <a href="/api/login">
+                    <Zap className="h-4 w-4" />
+                    Get Started Free
+                  </a>
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
       </main>
 
       <footer className="border-t py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>HR Manager - Multi-Tenant HR Management System</p>
+        <div className="container mx-auto flex flex-wrap items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
+          <Zap className="h-4 w-4" />
+          <p>HR Manager - People First. Paperwork Never.</p>
         </div>
       </footer>
     </div>
