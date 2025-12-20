@@ -7,6 +7,9 @@ import {
   attendance,
   payslips,
   holidays,
+  leaveRequests,
+  onboardingTasks,
+  notifications,
   type InsertOrganization,
   type Organization,
   type InsertAppUser,
@@ -19,6 +22,12 @@ import {
   type Payslip,
   type InsertHoliday,
   type Holiday,
+  type InsertLeaveRequest,
+  type LeaveRequest,
+  type InsertOnboardingTask,
+  type OnboardingTask,
+  type InsertNotification,
+  type Notification,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -64,6 +73,29 @@ export interface IStorage {
   createHoliday(holiday: InsertHoliday): Promise<Holiday>;
   updateHoliday(id: string, data: Partial<InsertHoliday>): Promise<Holiday | undefined>;
   deleteHoliday(id: string): Promise<void>;
+  
+  // Leave Requests
+  getLeaveRequestsByOrg(organizationId: string): Promise<LeaveRequest[]>;
+  getLeaveRequestsByEmployee(employeeId: string): Promise<LeaveRequest[]>;
+  getPendingLeaveRequests(organizationId: string): Promise<LeaveRequest[]>;
+  getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
+  createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest>;
+  updateLeaveRequest(id: string, data: Partial<InsertLeaveRequest>): Promise<LeaveRequest | undefined>;
+  
+  // Onboarding Tasks
+  getOnboardingTasksByOrg(organizationId: string): Promise<OnboardingTask[]>;
+  getOnboardingTasksByEmployee(employeeId: string): Promise<OnboardingTask[]>;
+  getPendingOnboardingTasks(organizationId: string): Promise<OnboardingTask[]>;
+  getOnboardingTask(id: string): Promise<OnboardingTask | undefined>;
+  createOnboardingTask(task: InsertOnboardingTask): Promise<OnboardingTask>;
+  updateOnboardingTask(id: string, data: Partial<InsertOnboardingTask>): Promise<OnboardingTask | undefined>;
+  
+  // Notifications
+  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  getUnreadNotifications(userId: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
   
   // Stats
   getSuperAdminStats(): Promise<{
@@ -300,6 +332,102 @@ export class DatabaseStorage implements IStorage {
 
   async deleteHoliday(id: string): Promise<void> {
     await db.delete(holidays).where(eq(holidays.id, id));
+  }
+
+  // Leave Requests
+  async getLeaveRequestsByOrg(organizationId: string): Promise<LeaveRequest[]> {
+    return db.select().from(leaveRequests).where(eq(leaveRequests.organizationId, organizationId)).orderBy(desc(leaveRequests.createdAt));
+  }
+
+  async getLeaveRequestsByEmployee(employeeId: string): Promise<LeaveRequest[]> {
+    return db.select().from(leaveRequests).where(eq(leaveRequests.employeeId, employeeId)).orderBy(desc(leaveRequests.createdAt));
+  }
+
+  async getPendingLeaveRequests(organizationId: string): Promise<LeaveRequest[]> {
+    return db.select().from(leaveRequests).where(
+      and(
+        eq(leaveRequests.organizationId, organizationId),
+        eq(leaveRequests.status, "pending")
+      )
+    ).orderBy(desc(leaveRequests.createdAt));
+  }
+
+  async getLeaveRequest(id: string): Promise<LeaveRequest | undefined> {
+    const [request] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+    return request;
+  }
+
+  async createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest> {
+    const [created] = await db.insert(leaveRequests).values(request).returning();
+    return created;
+  }
+
+  async updateLeaveRequest(id: string, data: Partial<InsertLeaveRequest>): Promise<LeaveRequest | undefined> {
+    const [updated] = await db.update(leaveRequests).set(data).where(eq(leaveRequests.id, id)).returning();
+    return updated;
+  }
+
+  // Onboarding Tasks
+  async getOnboardingTasksByOrg(organizationId: string): Promise<OnboardingTask[]> {
+    return db.select().from(onboardingTasks).where(eq(onboardingTasks.organizationId, organizationId)).orderBy(desc(onboardingTasks.createdAt));
+  }
+
+  async getOnboardingTasksByEmployee(employeeId: string): Promise<OnboardingTask[]> {
+    return db.select().from(onboardingTasks).where(eq(onboardingTasks.employeeId, employeeId)).orderBy(asc(onboardingTasks.dueDate));
+  }
+
+  async getPendingOnboardingTasks(organizationId: string): Promise<OnboardingTask[]> {
+    return db.select().from(onboardingTasks).where(
+      and(
+        eq(onboardingTasks.organizationId, organizationId),
+        or(
+          eq(onboardingTasks.status, "pending"),
+          eq(onboardingTasks.status, "in_progress")
+        )
+      )
+    ).orderBy(asc(onboardingTasks.dueDate));
+  }
+
+  async getOnboardingTask(id: string): Promise<OnboardingTask | undefined> {
+    const [task] = await db.select().from(onboardingTasks).where(eq(onboardingTasks.id, id));
+    return task;
+  }
+
+  async createOnboardingTask(task: InsertOnboardingTask): Promise<OnboardingTask> {
+    const [created] = await db.insert(onboardingTasks).values(task).returning();
+    return created;
+  }
+
+  async updateOnboardingTask(id: string, data: Partial<InsertOnboardingTask>): Promise<OnboardingTask | undefined> {
+    const [updated] = await db.update(onboardingTasks).set(data).where(eq(onboardingTasks.id, id)).returning();
+    return updated;
+  }
+
+  // Notifications
+  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+    return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadNotifications(userId: string): Promise<Notification[]> {
+    return db.select().from(notifications).where(
+      and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      )
+    ).orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [created] = await db.insert(notifications).values(notification).returning();
+    return created;
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, userId));
   }
 
   // Stats

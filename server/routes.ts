@@ -638,5 +638,257 @@ export async function registerRoutes(
     next();
   });
 
+  // Leave Requests - Employee endpoints
+  app.get("/api/employee/leave-requests", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const requests = await storage.getLeaveRequestsByEmployee(req.appUser!.employeeId);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/employee/leave-requests", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "Employee account required" });
+      }
+      const request = await storage.createLeaveRequest({
+        ...req.body,
+        employeeId: req.appUser!.employeeId,
+        organizationId: req.appUser!.organizationId!,
+        status: "pending",
+      });
+
+      // Notify org admins about new leave request
+      const orgAdmins = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
+      const emp = await storage.getEmployee(req.appUser!.employeeId);
+      for (const admin of orgAdmins.filter(u => u.role === "org_admin")) {
+        await storage.createNotification({
+          userId: admin.id,
+          organizationId: req.appUser!.organizationId!,
+          type: "leave_request",
+          title: "New Leave Request",
+          message: `${emp?.firstName} ${emp?.lastName} has requested leave from ${req.body.startDate} to ${req.body.endDate}`,
+          relatedId: request.id,
+          isRead: false,
+        });
+      }
+
+      res.status(201).json(request);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Leave Requests - Org Admin endpoints
+  app.get("/api/leave-requests", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getLeaveRequestsByOrg(req.appUser!.organizationId!);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/leave-requests/pending", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getPendingLeaveRequests(req.appUser!.organizationId!);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/leave-requests/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const request = await storage.getLeaveRequest(req.params.id);
+      if (!request || request.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Leave request not found" });
+      }
+
+      const updated = await storage.updateLeaveRequest(req.params.id, {
+        ...req.body,
+        reviewedBy: req.appUser!.id,
+        reviewedAt: new Date(),
+      });
+
+      // Notify employee about decision
+      const empUsers = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
+      const empUser = empUsers.find(u => u.employeeId === request.employeeId);
+      if (empUser) {
+        const status = req.body.status;
+        await storage.createNotification({
+          userId: empUser.id,
+          organizationId: req.appUser!.organizationId!,
+          type: status === "approved" ? "leave_approved" : "leave_rejected",
+          title: `Leave Request ${status === "approved" ? "Approved" : "Rejected"}`,
+          message: `Your leave request from ${request.startDate} to ${request.endDate} has been ${status}`,
+          relatedId: request.id,
+          isRead: false,
+        });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Onboarding Tasks - Org Admin endpoints
+  app.get("/api/onboarding-tasks", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const tasks = await storage.getOnboardingTasksByOrg(req.appUser!.organizationId!);
+      res.json(tasks);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/onboarding-tasks/pending", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const tasks = await storage.getPendingOnboardingTasks(req.appUser!.organizationId!);
+      res.json(tasks);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/onboarding-tasks", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const emp = await storage.getEmployee(req.body.employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(400).json({ message: "Invalid employee" });
+      }
+
+      const task = await storage.createOnboardingTask({
+        ...req.body,
+        organizationId: req.appUser!.organizationId!,
+        status: "pending",
+      });
+
+      // Notify assigned user if any
+      if (req.body.assignedTo) {
+        await storage.createNotification({
+          userId: req.body.assignedTo,
+          organizationId: req.appUser!.organizationId!,
+          type: "onboarding_task",
+          title: "New Onboarding Task Assigned",
+          message: `New task: ${req.body.title} for ${emp.firstName} ${emp.lastName}`,
+          relatedId: task.id,
+          isRead: false,
+        });
+      }
+
+      res.status(201).json(task);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/onboarding-tasks/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const task = await storage.getOnboardingTask(req.params.id);
+      if (!task || task.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+
+      const updateData: any = { ...req.body };
+      if (req.body.status === "completed" && task.status !== "completed") {
+        updateData.completedAt = new Date();
+      }
+
+      const updated = await storage.updateOnboardingTask(req.params.id, updateData);
+
+      // If task completed, notify org admins
+      if (req.body.status === "completed" && task.status !== "completed") {
+        const orgAdmins = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
+        for (const admin of orgAdmins.filter(u => u.role === "org_admin" && u.id !== req.appUser!.id)) {
+          await storage.createNotification({
+            userId: admin.id,
+            organizationId: req.appUser!.organizationId!,
+            type: "task_completed",
+            title: "Onboarding Task Completed",
+            message: `Task "${task.title}" has been completed`,
+            relatedId: task.id,
+            isRead: false,
+          });
+        }
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee onboarding tasks
+  app.get("/api/employee/onboarding-tasks", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const tasks = await storage.getOnboardingTasksByEmployee(req.appUser!.employeeId);
+      res.json(tasks);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Notifications
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const notificationList = await storage.getNotificationsByUser(req.appUser!.id);
+      res.json(notificationList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/notifications/unread", requireAuth, async (req, res) => {
+    try {
+      const notificationList = await storage.getUnreadNotifications(req.appUser!.id);
+      res.json(notificationList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      await storage.markNotificationRead(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
+    try {
+      await storage.markAllNotificationsRead(req.appUser!.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Pending approvals count for dashboard
+  app.get("/api/pending-approvals", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const pendingLeave = await storage.getPendingLeaveRequests(req.appUser!.organizationId!);
+      const pendingTasks = await storage.getPendingOnboardingTasks(req.appUser!.organizationId!);
+      res.json({
+        leaveRequests: pendingLeave.length,
+        onboardingTasks: pendingTasks.length,
+        total: pendingLeave.length + pendingTasks.length,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   return httpServer;
 }
