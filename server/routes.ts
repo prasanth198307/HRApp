@@ -6,6 +6,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { storage } from "./storage";
 import type { AppUser } from "@shared/schema";
+import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 
 function generateInviteToken(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -111,6 +112,12 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup authentication first (session, passport)
+  await setupAuth(app);
+  
+  // Register auth routes (/api/auth/user)
+  registerAuthRoutes(app);
+  
   app.use(appUserMiddleware);
 
   app.get("/api/user/context", requireAuth, async (req, res) => {
