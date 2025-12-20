@@ -53,8 +53,12 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Button asChild className="bg-gradient-to-r from-rose-500 to-orange-400 border-0 text-white" data-testid="button-login">
-              <a href="/api/login">Sign In</a>
+            <Button 
+              className="bg-gradient-to-r from-rose-500 to-orange-400 border-0 text-white" 
+              data-testid="button-login"
+              onClick={() => window.location.href = "/api/login"}
+            >
+              Sign In
             </Button>
           </div>
         </div>
@@ -87,13 +91,11 @@ export default function Landing() {
               <Button 
                 size="lg" 
                 className="gap-2 bg-gradient-to-r from-rose-500 to-orange-400 border-0 text-white text-lg px-8 py-6" 
-                asChild 
                 data-testid="button-get-started"
+                onClick={() => window.location.href = "/api/login"}
               >
-                <a href="/api/login">
-                  <Rocket className="h-5 w-5" />
-                  Start Free
-                </a>
+                <Rocket className="h-5 w-5" />
+                Start Free
               </Button>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">No credit card required</p>
@@ -142,12 +144,10 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   className="mt-8 gap-2 bg-gradient-to-r from-rose-500 to-orange-400 border-0 text-white text-lg px-8 py-6" 
-                  asChild 
                   data-testid="button-cta-login"
+                  onClick={() => window.location.href = "/api/login"}
                 >
-                  <a href="/api/login">
-                    Get Started Free
-                  </a>
+                  Get Started Free
                 </Button>
               </div>
             </div>
