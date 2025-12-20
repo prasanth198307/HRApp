@@ -1,6 +1,5 @@
 import { Link, useLocation } from "wouter";
 import {
-  Building2,
   Users,
   Calendar,
   FileText,
@@ -11,6 +10,8 @@ import {
   UserPlus,
   LogOut,
   ChevronDown,
+  Heart,
+  Building2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -78,11 +79,11 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Building2 className="h-5 w-5" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-orange-400 text-white shadow-lg shadow-rose-500/25">
+            <Heart className="h-5 w-5 fill-current" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-semibold" data-testid="text-app-name">HR Manager</span>
+            <span className="text-xl font-black tracking-tighter bg-gradient-to-r from-rose-500 to-orange-400 bg-clip-text text-transparent" data-testid="text-app-name">HUMANE</span>
             {organization && (
               <span className="text-xs text-muted-foreground" data-testid="text-org-name">
                 {organization.name}
