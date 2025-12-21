@@ -233,6 +233,22 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/organizations/:id/status", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { isActive } = req.body;
+      if (typeof isActive !== "boolean") {
+        return res.status(400).json({ message: "isActive must be a boolean" });
+      }
+      const org = await storage.updateOrganizationStatus(req.params.id, isActive);
+      if (!org) {
+        return res.status(404).json({ message: "Organization not found" });
+      }
+      res.json(org);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/org-admins", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const { organizationId, email } = req.body;

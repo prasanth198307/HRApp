@@ -36,6 +36,7 @@ export interface IStorage {
   getOrganization(id: string): Promise<Organization | undefined>;
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: string, data: Partial<InsertOrganization>): Promise<Organization | undefined>;
+  updateOrganizationStatus(id: string, isActive: boolean): Promise<Organization | undefined>;
   
   // App Users
   getAppUserByEmail(email: string): Promise<AppUser | undefined>;
@@ -138,6 +139,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateOrganization(id: string, data: Partial<InsertOrganization>): Promise<Organization | undefined> {
     const [updated] = await db.update(organizations).set(data).where(eq(organizations.id, id)).returning();
+    return updated;
+  }
+
+  async updateOrganizationStatus(id: string, isActive: boolean): Promise<Organization | undefined> {
+    const [updated] = await db.update(organizations).set({ isActive }).where(eq(organizations.id, id)).returning();
     return updated;
   }
 
