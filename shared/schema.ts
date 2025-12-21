@@ -16,7 +16,7 @@ export const attendanceStatusEnum = pgEnum("attendance_status", ["present", "abs
 export const employmentStatusEnum = pgEnum("employment_status", ["active", "exited", "on_notice"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
 export const leaveTypeEnum = pgEnum("leave_type", ["annual", "sick", "personal", "maternity", "paternity", "unpaid", "other"]);
-export const notificationTypeEnum = pgEnum("notification_type", ["leave_request", "leave_approved", "leave_rejected", "onboarding_task", "task_completed", "general"]);
+export const notificationTypeEnum = pgEnum("notification_type", ["leave_request", "leave_approved", "leave_rejected", "onboarding_task", "task_completed", "general", "password_reset_request"]);
 export const onboardingTaskStatusEnum = pgEnum("onboarding_task_status", ["pending", "in_progress", "completed"]);
 
 // Organizations table
@@ -144,6 +144,17 @@ export const onboardingTasks = pgTable("onboarding_tasks", {
   dueDate: date("due_date"),
   status: onboardingTaskStatusEnum("status").notNull().default("pending"),
   assignedTo: varchar("assigned_to").references(() => appUsers.id),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Password Reset Requests table
+export const passwordResetRequests = pgTable("password_reset_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, completed, dismissed
+  completedBy: varchar("completed_by").references(() => appUsers.id),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -304,6 +315,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertPasswordResetRequestSchema = createInsertSchema(passwordResetRequests).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
 // Types
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
@@ -331,6 +348,9 @@ export type OnboardingTask = typeof onboardingTasks.$inferSelect;
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export type InsertPasswordResetRequest = z.infer<typeof insertPasswordResetRequestSchema>;
+export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
 
 // Industry options for frontend
 export const industryOptions = [

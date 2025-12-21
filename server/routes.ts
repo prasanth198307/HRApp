@@ -197,6 +197,83 @@ export async function registerRoutes(
     }
   });
 
+  // Public: Request password reset (no auth required)
+  app.post("/api/password-reset-request", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      
+      // Check if user exists
+      const user = await storage.getAppUserByEmail(email);
+      if (!user) {
+        // Don't reveal if user exists for security, just return success
+        return res.json({ message: "If an account with this email exists, your request has been submitted to the administrator." });
+      }
+      
+      // Create a password reset request
+      await storage.createPasswordResetRequest({
+        email,
+        organizationId: user.organizationId || undefined,
+        status: "pending",
+      });
+      
+      res.json({ message: "Your password reset request has been submitted. An administrator will review it shortly." });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Super Admin: Get all pending password reset requests
+  app.get("/api/admin/password-reset-requests", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getPendingPasswordResetRequests();
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Org Admin: Get pending password reset requests for their org
+  app.get("/api/org/password-reset-requests", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getPendingPasswordResetRequests(req.appUser!.organizationId!);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Complete a password reset request (mark as done after resetting)
+  app.post("/api/password-reset-requests/:id/complete", requireAuth, async (req, res) => {
+    try {
+      if (req.appUser!.role !== "super_admin" && req.appUser!.role !== "org_admin") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      await storage.completePasswordResetRequest(req.params.id, req.appUser!.id);
+      res.json({ message: "Request marked as completed" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Dismiss a password reset request
+  app.post("/api/password-reset-requests/:id/dismiss", requireAuth, async (req, res) => {
+    try {
+      if (req.appUser!.role !== "super_admin" && req.appUser!.role !== "org_admin") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      await storage.dismissPasswordResetRequest(req.params.id);
+      res.json({ message: "Request dismissed" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/invite/check", async (req, res) => {
     try {
       const token = req.query.token as string;

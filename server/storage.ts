@@ -10,6 +10,7 @@ import {
   leaveRequests,
   onboardingTasks,
   notifications,
+  passwordResetRequests,
   type InsertOrganization,
   type Organization,
   type InsertAppUser,
@@ -28,6 +29,8 @@ import {
   type OnboardingTask,
   type InsertNotification,
   type Notification,
+  type InsertPasswordResetRequest,
+  type PasswordResetRequest,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -99,6 +102,12 @@ export interface IStorage {
   markNotificationRead(id: string): Promise<void>;
   markAllNotificationsRead(userId: string): Promise<void>;
   
+  // Password Reset Requests
+  createPasswordResetRequest(request: InsertPasswordResetRequest): Promise<PasswordResetRequest>;
+  getPendingPasswordResetRequests(organizationId?: string): Promise<PasswordResetRequest[]>;
+  completePasswordResetRequest(id: string, completedBy: string): Promise<void>;
+  dismissPasswordResetRequest(id: string): Promise<void>;
+
   // Stats
   getSuperAdminStats(): Promise<{
     totalOrganizations: number;
@@ -484,6 +493,38 @@ export class DatabaseStorage implements IStorage {
       leaveThisMonth: monthAttendance.filter(a => a.status === 'leave').length,
       totalPayslips: allPayslips.length,
     };
+  }
+
+  // Password Reset Requests
+  async createPasswordResetRequest(request: InsertPasswordResetRequest): Promise<PasswordResetRequest> {
+    const [created] = await db.insert(passwordResetRequests).values(request).returning();
+    return created;
+  }
+
+  async getPendingPasswordResetRequests(organizationId?: string): Promise<PasswordResetRequest[]> {
+    if (organizationId) {
+      return db.select().from(passwordResetRequests)
+        .where(and(
+          eq(passwordResetRequests.organizationId, organizationId),
+          eq(passwordResetRequests.status, "pending")
+        ))
+        .orderBy(desc(passwordResetRequests.createdAt));
+    }
+    return db.select().from(passwordResetRequests)
+      .where(eq(passwordResetRequests.status, "pending"))
+      .orderBy(desc(passwordResetRequests.createdAt));
+  }
+
+  async completePasswordResetRequest(id: string, completedBy: string): Promise<void> {
+    await db.update(passwordResetRequests)
+      .set({ status: "completed", completedBy, completedAt: new Date() })
+      .where(eq(passwordResetRequests.id, id));
+  }
+
+  async dismissPasswordResetRequest(id: string): Promise<void> {
+    await db.update(passwordResetRequests)
+      .set({ status: "dismissed" })
+      .where(eq(passwordResetRequests.id, id));
   }
 }
 
