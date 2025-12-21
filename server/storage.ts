@@ -12,6 +12,9 @@ import {
   onboardingTasks,
   notifications,
   passwordResetRequests,
+  leavePolicies,
+  employeeLeaveBalances,
+  leaveTransactions,
   type InsertOrganization,
   type Organization,
   type InsertAppUser,
@@ -34,6 +37,12 @@ import {
   type Notification,
   type InsertPasswordResetRequest,
   type PasswordResetRequest,
+  type InsertLeavePolicy,
+  type LeavePolicy,
+  type InsertEmployeeLeaveBalance,
+  type EmployeeLeaveBalance,
+  type InsertLeaveTransaction,
+  type LeaveTransaction,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -116,6 +125,26 @@ export interface IStorage {
   getPasswordResetRequestById(id: string): Promise<PasswordResetRequest | undefined>;
   completePasswordResetRequest(id: string, completedBy: string): Promise<void>;
   dismissPasswordResetRequest(id: string): Promise<void>;
+
+  // Leave Policies
+  getLeavePoliciesByOrg(organizationId: string): Promise<LeavePolicy[]>;
+  getLeavePolicy(id: string): Promise<LeavePolicy | undefined>;
+  createLeavePolicy(policy: InsertLeavePolicy): Promise<LeavePolicy>;
+  updateLeavePolicy(id: string, data: Partial<InsertLeavePolicy>): Promise<LeavePolicy | undefined>;
+  deleteLeavePolicy(id: string): Promise<void>;
+
+  // Employee Leave Balances
+  getEmployeeLeaveBalances(employeeId: string, year: number): Promise<EmployeeLeaveBalance[]>;
+  getEmployeeLeaveBalance(employeeId: string, policyId: string, year: number): Promise<EmployeeLeaveBalance | undefined>;
+  getAllLeaveBalancesByOrg(organizationId: string, year: number): Promise<EmployeeLeaveBalance[]>;
+  createEmployeeLeaveBalance(balance: InsertEmployeeLeaveBalance): Promise<EmployeeLeaveBalance>;
+  updateEmployeeLeaveBalance(id: string, data: Partial<InsertEmployeeLeaveBalance>): Promise<EmployeeLeaveBalance | undefined>;
+  initializeEmployeeBalances(employeeId: string, organizationId: string, year: number): Promise<void>;
+
+  // Leave Transactions
+  getLeaveTransactions(balanceId: string): Promise<LeaveTransaction[]>;
+  getLeaveTransactionsByEmployee(employeeId: string, year?: number): Promise<LeaveTransaction[]>;
+  createLeaveTransaction(transaction: InsertLeaveTransaction): Promise<LeaveTransaction>;
 
   // Stats
   getSuperAdminStats(): Promise<{
@@ -562,6 +591,129 @@ export class DatabaseStorage implements IStorage {
     await db.update(passwordResetRequests)
       .set({ status: "dismissed" })
       .where(eq(passwordResetRequests.id, id));
+  }
+
+  // Leave Policies
+  async getLeavePoliciesByOrg(organizationId: string): Promise<LeavePolicy[]> {
+    return db.select().from(leavePolicies)
+      .where(eq(leavePolicies.organizationId, organizationId))
+      .orderBy(asc(leavePolicies.code));
+  }
+
+  async getLeavePolicy(id: string): Promise<LeavePolicy | undefined> {
+    const [policy] = await db.select().from(leavePolicies).where(eq(leavePolicies.id, id));
+    return policy;
+  }
+
+  async createLeavePolicy(policy: InsertLeavePolicy): Promise<LeavePolicy> {
+    const [created] = await db.insert(leavePolicies).values(policy).returning();
+    return created;
+  }
+
+  async updateLeavePolicy(id: string, data: Partial<InsertLeavePolicy>): Promise<LeavePolicy | undefined> {
+    const [updated] = await db.update(leavePolicies).set(data).where(eq(leavePolicies.id, id)).returning();
+    return updated;
+  }
+
+  async deleteLeavePolicy(id: string): Promise<void> {
+    await db.delete(leavePolicies).where(eq(leavePolicies.id, id));
+  }
+
+  // Employee Leave Balances
+  async getEmployeeLeaveBalances(employeeId: string, year: number): Promise<EmployeeLeaveBalance[]> {
+    return db.select().from(employeeLeaveBalances)
+      .where(and(
+        eq(employeeLeaveBalances.employeeId, employeeId),
+        eq(employeeLeaveBalances.year, year)
+      ));
+  }
+
+  async getEmployeeLeaveBalance(employeeId: string, policyId: string, year: number): Promise<EmployeeLeaveBalance | undefined> {
+    const [balance] = await db.select().from(employeeLeaveBalances)
+      .where(and(
+        eq(employeeLeaveBalances.employeeId, employeeId),
+        eq(employeeLeaveBalances.policyId, policyId),
+        eq(employeeLeaveBalances.year, year)
+      ));
+    return balance;
+  }
+
+  async getAllLeaveBalancesByOrg(organizationId: string, year: number): Promise<EmployeeLeaveBalance[]> {
+    return db.select().from(employeeLeaveBalances)
+      .where(and(
+        eq(employeeLeaveBalances.organizationId, organizationId),
+        eq(employeeLeaveBalances.year, year)
+      ));
+  }
+
+  async createEmployeeLeaveBalance(balance: InsertEmployeeLeaveBalance): Promise<EmployeeLeaveBalance> {
+    const [created] = await db.insert(employeeLeaveBalances).values(balance).returning();
+    return created;
+  }
+
+  async updateEmployeeLeaveBalance(id: string, data: Partial<InsertEmployeeLeaveBalance>): Promise<EmployeeLeaveBalance | undefined> {
+    const [updated] = await db.update(employeeLeaveBalances).set(data).where(eq(employeeLeaveBalances.id, id)).returning();
+    return updated;
+  }
+
+  async initializeEmployeeBalances(employeeId: string, organizationId: string, year: number): Promise<void> {
+    // Get all active leave policies for the organization
+    const policies = await this.getLeavePoliciesByOrg(organizationId);
+    const activePolicies = policies.filter(p => p.isActive);
+
+    for (const policy of activePolicies) {
+      // Check if balance already exists
+      const existing = await this.getEmployeeLeaveBalance(employeeId, policy.id, year);
+      if (!existing) {
+        // Calculate initial accrual based on policy
+        let initialAccrued = 0;
+        if (policy.accrualMethod === 'yearly') {
+          initialAccrued = policy.annualQuota;
+        }
+        // For monthly accrual, we'll handle that separately
+
+        await this.createEmployeeLeaveBalance({
+          employeeId,
+          policyId: policy.id,
+          organizationId,
+          year,
+          openingBalance: 0,
+          accrued: initialAccrued,
+          used: 0,
+          adjustment: 0,
+          currentBalance: initialAccrued,
+        });
+      }
+    }
+  }
+
+  // Leave Transactions
+  async getLeaveTransactions(balanceId: string): Promise<LeaveTransaction[]> {
+    return db.select().from(leaveTransactions)
+      .where(eq(leaveTransactions.balanceId, balanceId))
+      .orderBy(desc(leaveTransactions.createdAt));
+  }
+
+  async getLeaveTransactionsByEmployee(employeeId: string, year?: number): Promise<LeaveTransaction[]> {
+    if (year) {
+      const startDate = new Date(year, 0, 1);
+      const endDate = new Date(year + 1, 0, 1);
+      return db.select().from(leaveTransactions)
+        .where(and(
+          eq(leaveTransactions.employeeId, employeeId),
+          gte(leaveTransactions.createdAt, startDate),
+          lte(leaveTransactions.createdAt, endDate)
+        ))
+        .orderBy(desc(leaveTransactions.createdAt));
+    }
+    return db.select().from(leaveTransactions)
+      .where(eq(leaveTransactions.employeeId, employeeId))
+      .orderBy(desc(leaveTransactions.createdAt));
+  }
+
+  async createLeaveTransaction(transaction: InsertLeaveTransaction): Promise<LeaveTransaction> {
+    const [created] = await db.insert(leaveTransactions).values(transaction).returning();
+    return created;
   }
 }
 
