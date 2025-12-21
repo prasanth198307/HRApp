@@ -1129,7 +1129,6 @@ export async function registerRoutes(
       const updated = await storage.updateLeaveRequest(req.params.id, {
         ...req.body,
         reviewedBy: req.appUser!.id,
-        reviewedAt: new Date(),
       });
 
       // If approved, deduct from leave balance and create attendance records
@@ -1142,7 +1141,6 @@ export async function registerRoutes(
           await storage.updateLeaveRequest(req.params.id, {
             status: "rejected",
             reviewedBy: req.appUser!.id,
-            reviewedAt: new Date(),
           });
           return res.status(400).json({ 
             message: `Cannot approve: Leave request spans multiple years (${startYear} to ${endYear}). Please reject this request and have the employee submit separate requests for each year.` 
@@ -1157,21 +1155,22 @@ export async function registerRoutes(
           // Revert the approval if no balance record exists
           await storage.updateLeaveRequest(req.params.id, {
             status: "pending",
-            reviewedBy: null,
-            reviewedAt: null,
+            reviewedBy: undefined,
           });
           return res.status(400).json({ 
             message: `Cannot approve: No leave balance record found for year ${leaveYear}. Please ensure employee has initialized leave balances for this policy and year.` 
           });
         }
 
-        const totalDays = request.totalDays || 1;
-        const newUsed = balance.used + totalDays;
-        const newBalance = balance.currentBalance - totalDays;
+        const totalDays = parseFloat(request.totalDays) || 1;
+        const currentUsed = parseFloat(balance.used);
+        const currentBalance = parseFloat(balance.currentBalance);
+        const newUsed = currentUsed + totalDays;
+        const newBalance = currentBalance - totalDays;
 
         await storage.updateEmployeeLeaveBalance(balance.id, {
-          used: newUsed,
-          currentBalance: newBalance,
+          used: String(newUsed),
+          currentBalance: String(newBalance),
         });
 
         // Create transaction record
@@ -1181,9 +1180,9 @@ export async function registerRoutes(
           policyId: request.policyId,
           organizationId: req.appUser!.organizationId!,
           transactionType: "request",
-          amount: -totalDays,
-          balanceAfter: newBalance,
-          leaveRequestId: request.id,
+          amount: String(-totalDays),
+          balanceAfter: String(newBalance),
+          referenceId: request.id,
           notes: `Leave approved: ${request.startDate} to ${request.endDate}`,
           createdBy: req.appUser!.id,
         });
@@ -1419,6 +1418,216 @@ export async function registerRoutes(
       const year = req.query.year ? parseInt(req.query.year as string) : undefined;
       const transactions = await storage.getLeaveTransactionsByEmployee(req.appUser!.employeeId, year);
       res.json(transactions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Time Entries - Employee endpoints
+  app.get("/api/employee/time-entries", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const date = req.query.date as string | undefined;
+      const entries = await storage.getTimeEntriesByEmployee(req.appUser!.employeeId, date);
+      res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employee/time-entries/today", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const entries = await storage.getTodayTimeEntries(req.appUser!.employeeId);
+      res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/employee/time-entries", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "Employee account required" });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const entry = await storage.createTimeEntry({
+        employeeId: req.appUser!.employeeId,
+        organizationId: req.appUser!.organizationId!,
+        date: today,
+        entryType: req.body.entryType,
+        entryTime: new Date(),
+        notes: req.body.notes || null,
+      });
+      res.status(201).json(entry);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Time Entries - Org Admin endpoints
+  app.get("/api/time-entries", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const date = req.query.date as string || new Date().toISOString().split('T')[0];
+      const entries = await storage.getTimeEntriesByOrg(req.appUser!.organizationId!, date);
+      res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/time-entries/:employeeId", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const emp = await storage.getEmployee(req.params.employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      const date = req.query.date as string | undefined;
+      const entries = await storage.getTimeEntriesByEmployee(req.params.employeeId, date);
+      res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Comp Off Grants - Employee endpoints
+  app.get("/api/employee/comp-off-grants", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const grants = await storage.getCompOffGrantsByEmployee(req.appUser!.employeeId);
+      res.json(grants);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Comp Off Grants - Org Admin endpoints
+  app.get("/api/comp-off-grants", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const grants = await storage.getCompOffGrantsByOrg(req.appUser!.organizationId!);
+      res.json(grants);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/comp-off-grants/pending", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const grants = await storage.getPendingCompOffGrants(req.appUser!.organizationId!);
+      res.json(grants);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/comp-off-grants", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const emp = await storage.getEmployee(req.body.employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(400).json({ message: "Invalid employee" });
+      }
+
+      const grant = await storage.createCompOffGrant({
+        employeeId: req.body.employeeId,
+        organizationId: req.appUser!.organizationId!,
+        workDate: req.body.workDate,
+        hoursWorked: req.body.hoursWorked || "8",
+        daysGranted: req.body.daysGranted,
+        source: req.body.source,
+        reason: req.body.reason || null,
+        grantedBy: req.appUser!.id,
+        isApplied: false,
+      });
+
+      // Notify employee about the comp off grant
+      const empUsers = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
+      const empUser = empUsers.find(u => u.employeeId === req.body.employeeId);
+      if (empUser) {
+        await storage.createNotification({
+          userId: empUser.id,
+          organizationId: req.appUser!.organizationId!,
+          type: "general",
+          title: "Comp Off Granted",
+          message: `You have been granted ${req.body.daysGranted} day(s) of compensatory off for ${req.body.source.replace('_', ' ')}`,
+          relatedId: grant.id,
+          isRead: false,
+        });
+      }
+
+      res.status(201).json(grant);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/comp-off-grants/:id/apply", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const grants = await storage.getCompOffGrantsByOrg(req.appUser!.organizationId!);
+      const grant = grants.find(g => g.id === req.params.id);
+      if (!grant) {
+        return res.status(404).json({ message: "Comp off grant not found" });
+      }
+      if (grant.isApplied) {
+        return res.status(400).json({ message: "Comp off already applied to balance" });
+      }
+
+      // Find COMP_OFF leave policy for this org
+      const policies = await storage.getLeavePoliciesByOrg(req.appUser!.organizationId!);
+      const compOffPolicy = policies.find(p => p.code === 'COMP_OFF' && p.isActive);
+      if (!compOffPolicy) {
+        return res.status(400).json({ message: "No active COMP_OFF leave policy found" });
+      }
+
+      // Get or create balance for current year
+      const year = new Date().getFullYear();
+      let balance = await storage.getEmployeeLeaveBalance(grant.employeeId, compOffPolicy.id, year);
+      if (!balance) {
+        balance = await storage.createEmployeeLeaveBalance({
+          employeeId: grant.employeeId,
+          policyId: compOffPolicy.id,
+          organizationId: req.appUser!.organizationId!,
+          year,
+          openingBalance: "0",
+          accrued: "0",
+          used: "0",
+          adjustment: "0",
+          currentBalance: "0",
+        });
+      }
+
+      // Add grant to balance
+      const grantAmount = parseFloat(grant.daysGranted);
+      const newAccrued = parseFloat(balance.accrued) + grantAmount;
+      const newBalance = parseFloat(balance.currentBalance) + grantAmount;
+
+      await storage.updateEmployeeLeaveBalance(balance.id, {
+        accrued: String(newAccrued),
+        currentBalance: String(newBalance),
+      });
+
+      // Create transaction
+      await storage.createLeaveTransaction({
+        employeeId: grant.employeeId,
+        balanceId: balance.id,
+        policyId: compOffPolicy.id,
+        organizationId: req.appUser!.organizationId!,
+        transactionType: "accrual",
+        amount: String(grantAmount),
+        balanceAfter: String(newBalance),
+        notes: `Comp Off grant: ${grant.source.replace('_', ' ')} on ${grant.workDate}`,
+        createdBy: req.appUser!.id,
+      });
+
+      // Mark grant as applied
+      const updated = await storage.applyCompOffGrant(req.params.id);
+      res.json(updated);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
