@@ -104,6 +104,19 @@ export default function Organizations() {
     enabled: !!manageAdminsOrg,
   });
 
+  const toggleAdminMutation = useMutation({
+    mutationFn: async ({ adminId, isActive }: { adminId: string; isActive: boolean }) => {
+      return apiRequest("PATCH", `/api/org-admins/${adminId}`, { isActive });
+    },
+    onSuccess: () => {
+      toast({ title: "Admin status updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/org-admins", manageAdminsOrg?.id] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update status", description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetPasswordMutation = useMutation({
     mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
       return apiRequest("POST", `/api/admin/reset-password/${userId}`, { newPassword });
@@ -669,6 +682,18 @@ export default function Organizations() {
                     <Badge variant={admin.isPending ? "secondary" : admin.isActive ? "default" : "destructive"}>
                       {admin.isPending ? "Pending" : admin.isActive ? "Active" : "Inactive"}
                     </Badge>
+                    {!admin.isPending && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleAdminMutation.mutate({ adminId: admin.id, isActive: !admin.isActive })}
+                        disabled={toggleAdminMutation.isPending}
+                        title={admin.isActive ? "Disable account" : "Enable account"}
+                        data-testid={`button-toggle-admin-${admin.id}`}
+                      >
+                        {admin.isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

@@ -447,6 +447,31 @@ export async function registerRoutes(
     }
   });
 
+  // Super Admin: Toggle org admin active status
+  app.patch("/api/org-admins/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { isActive } = req.body;
+      if (typeof isActive !== "boolean") {
+        return res.status(400).json({ message: "isActive must be a boolean" });
+      }
+      
+      const user = await storage.getAppUserById(req.params.id);
+      if (!user || user.role !== "org_admin") {
+        return res.status(404).json({ message: "Org admin not found" });
+      }
+      
+      const updated = await storage.updateAppUser(req.params.id, { isActive });
+      if (!updated) {
+        return res.status(404).json({ message: "Failed to update" });
+      }
+      
+      const { password, ...safeUser } = updated;
+      res.json(safeUser);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/admin/holidays", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const holidayList = await storage.getDefaultHolidays();
