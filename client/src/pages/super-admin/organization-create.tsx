@@ -29,10 +29,18 @@ import { Link, useLocation } from "wouter";
 
 const createOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
+  legalName: z.string().optional(),
   industry: z.string().min(1, "Please select an industry"),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
+  website: z.string().optional(),
+  gstNumber: z.string().optional(),
+  panNumber: z.string().optional(),
+  tanNumber: z.string().optional(),
+  cinNumber: z.string().optional(),
+  udyamNumber: z.string().optional(),
+  fssaiNumber: z.string().optional(),
   adminEmail: z.string().email("Valid admin email required"),
   adminPassword: z.string().min(8, "Password must be at least 8 characters"),
   adminFirstName: z.string().min(1, "First name required"),
@@ -49,10 +57,18 @@ export default function OrganizationCreate() {
     resolver: zodResolver(createOrgSchema),
     defaultValues: {
       name: "",
+      legalName: "",
       industry: "",
       address: "",
       phone: "",
       email: "",
+      website: "",
+      gstNumber: "",
+      panNumber: "",
+      tanNumber: "",
+      cinNumber: "",
+      udyamNumber: "",
+      fssaiNumber: "",
       adminEmail: "",
       adminPassword: "",
       adminFirstName: "",
@@ -77,10 +93,18 @@ export default function OrganizationCreate() {
   const onSubmit = (values: CreateOrgFormValues) => {
     const data = {
       name: values.name,
+      legalName: values.legalName || null,
       industry: values.industry,
       address: values.address || null,
       phone: values.phone || null,
       email: values.email || null,
+      website: values.website || null,
+      gstNumber: values.gstNumber || null,
+      panNumber: values.panNumber || null,
+      tanNumber: values.tanNumber || null,
+      cinNumber: values.cinNumber || null,
+      udyamNumber: values.udyamNumber || null,
+      fssaiNumber: values.fssaiNumber || null,
       admin: {
         email: values.adminEmail,
         password: values.adminPassword,
@@ -121,6 +145,19 @@ export default function OrganizationCreate() {
                       <FormLabel>Organization Name *</FormLabel>
                       <FormControl>
                         <Input placeholder="Enter organization name" {...field} data-testid="input-org-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="legalName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Legal Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Registered legal name" {...field} data-testid="input-legal-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -178,6 +215,19 @@ export default function OrganizationCreate() {
                 />
                 <FormField
                   control={form.control}
+                  name="website"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Website</FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://example.com" {...field} data-testid="input-website" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="address"
                   render={({ field }) => (
                     <FormItem className="md:col-span-2">
@@ -189,6 +239,93 @@ export default function OrganizationCreate() {
                     </FormItem>
                   )}
                 />
+              </div>
+
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-medium mb-4">Compliance Details</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Enter statutory identification numbers for the organization.
+                </p>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="gstNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>GST Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="22AAAAA0000A1Z5" {...field} data-testid="input-gst-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="panNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>PAN Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="AAAAA0000A" {...field} data-testid="input-pan-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="tanNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>TAN Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="AAAA00000A" {...field} data-testid="input-tan-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="cinNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CIN Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Company Identification Number" {...field} data-testid="input-cin-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="udyamNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>UDYAM Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Udyam-XX-00-0000000" {...field} data-testid="input-udyam-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fssaiNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>FSSAI Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Food license number" {...field} data-testid="input-fssai-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
 
               <div className="border-t pt-6">

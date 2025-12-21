@@ -9,12 +9,40 @@ import { storage } from "./storage";
 import type { AppUser } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, appUserMiddleware, hashPassword } from "./auth";
 
+const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const tanRegex = /^[A-Z]{4}[0-9]{5}[A-Z]$/;
+const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}Z[0-9A-Z]{1}$/;
+
+const complianceFields = {
+  legalName: z.string().nullable().optional().transform(v => v || null),
+  website: z.string().nullable().optional().transform(v => v || null),
+  gstNumber: z.string().nullable().optional().transform(v => {
+    if (!v) return null;
+    const upper = v.toUpperCase().trim();
+    return upper || null;
+  }),
+  panNumber: z.string().nullable().optional().transform(v => {
+    if (!v) return null;
+    const upper = v.toUpperCase().trim();
+    return upper || null;
+  }),
+  tanNumber: z.string().nullable().optional().transform(v => {
+    if (!v) return null;
+    const upper = v.toUpperCase().trim();
+    return upper || null;
+  }),
+  cinNumber: z.string().nullable().optional().transform(v => v?.trim() || null),
+  udyamNumber: z.string().nullable().optional().transform(v => v?.trim() || null),
+  fssaiNumber: z.string().nullable().optional().transform(v => v?.trim() || null),
+};
+
 const createOrgWithAdminSchema = z.object({
   name: z.string().min(2),
   industry: z.string().min(1),
   address: z.string().nullable().optional().transform(v => v || null),
   phone: z.string().nullable().optional().transform(v => v || null),
   email: z.string().email().nullable().optional().or(z.literal("")).transform(v => v || null),
+  ...complianceFields,
   admin: z.object({
     email: z.string().email(),
     password: z.string().min(8),
@@ -29,6 +57,7 @@ const updateOrgSchema = z.object({
   address: z.string().nullable().optional().transform(v => v || null),
   phone: z.string().nullable().optional().transform(v => v || null),
   email: z.string().email().nullable().optional().or(z.literal("")).transform(v => v || null),
+  ...complianceFields,
 });
 
 function generateInviteToken(): string {

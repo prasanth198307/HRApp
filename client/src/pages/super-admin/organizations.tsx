@@ -44,19 +44,20 @@ import {
 import type { Organization, InsertOrganization } from "@shared/schema";
 import { industryOptions } from "@shared/schema";
 
-const baseOrgSchema = z.object({
+const editOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
+  legalName: z.string().optional(),
   industry: z.string().min(1, "Please select an industry"),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
-});
-
-const editOrgSchema = baseOrgSchema.extend({
-  adminEmail: z.string().optional(),
-  adminPassword: z.string().optional(),
-  adminFirstName: z.string().optional(),
-  adminLastName: z.string().optional(),
+  website: z.string().optional(),
+  gstNumber: z.string().optional(),
+  panNumber: z.string().optional(),
+  tanNumber: z.string().optional(),
+  cinNumber: z.string().optional(),
+  udyamNumber: z.string().optional(),
+  fssaiNumber: z.string().optional(),
 });
 
 const adminFormSchema = z.object({
@@ -82,10 +83,18 @@ export default function Organizations() {
     resolver: zodResolver(editOrgSchema),
     defaultValues: {
       name: "",
+      legalName: "",
       industry: "",
       address: "",
       phone: "",
       email: "",
+      website: "",
+      gstNumber: "",
+      panNumber: "",
+      tanNumber: "",
+      cinNumber: "",
+      udyamNumber: "",
+      fssaiNumber: "",
     },
   });
 
@@ -129,10 +138,18 @@ export default function Organizations() {
     if (editingOrg) {
       const data = {
         name: values.name,
+        legalName: values.legalName || null,
         industry: values.industry as any,
         address: values.address || null,
         phone: values.phone || null,
         email: values.email || null,
+        website: values.website || null,
+        gstNumber: values.gstNumber || null,
+        panNumber: values.panNumber || null,
+        tanNumber: values.tanNumber || null,
+        cinNumber: values.cinNumber || null,
+        udyamNumber: values.udyamNumber || null,
+        fssaiNumber: values.fssaiNumber || null,
       };
       updateMutation.mutate({ id: editingOrg.id, data });
     }
@@ -148,14 +165,18 @@ export default function Organizations() {
     setEditingOrg(org);
     editForm.reset({
       name: org.name || "",
+      legalName: org.legalName || "",
       industry: org.industry || "",
       address: org.address || "",
       phone: org.phone || "",
       email: org.email || "",
-      adminEmail: "",
-      adminPassword: "",
-      adminFirstName: "",
-      adminLastName: "",
+      website: org.website || "",
+      gstNumber: org.gstNumber || "",
+      panNumber: org.panNumber || "",
+      tanNumber: org.tanNumber || "",
+      cinNumber: org.cinNumber || "",
+      udyamNumber: org.udyamNumber || "",
+      fssaiNumber: org.fssaiNumber || "",
     });
   };
 
@@ -287,88 +308,201 @@ export default function Organizations() {
       </Card>
 
       <Dialog open={!!editingOrg} onOpenChange={(open) => !open && setEditingOrg(null)}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Organization</DialogTitle>
           </DialogHeader>
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-              <FormField
-                control={editForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Organization Name *</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-edit-org-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="industry"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Industry *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={editForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization Name *</FormLabel>
                       <FormControl>
-                        <SelectTrigger data-testid="select-edit-industry">
-                          <SelectValue placeholder="Select industry" />
-                        </SelectTrigger>
+                        <Input {...field} data-testid="input-edit-org-name" />
                       </FormControl>
-                      <SelectContent>
-                        {industryOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} data-testid="input-edit-org-email" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-edit-org-phone" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-edit-org-address" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="legalName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Legal Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-legal-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="industry"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Industry *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-industry">
+                            <SelectValue placeholder="Select industry" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {industryOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} data-testid="input-edit-org-email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-org-phone" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="website"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Website</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-website" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-org-address" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium mb-3">Compliance Details</h4>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormField
+                    control={editForm.control}
+                    name="gstNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>GST Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-gst" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="panNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>PAN Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-pan" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="tanNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>TAN Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-tan" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="cinNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CIN Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-cin" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="udyamNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>UDYAM Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-udyam" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="fssaiNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>FSSAI Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-fssai" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setEditingOrg(null)}>
                   Cancel
