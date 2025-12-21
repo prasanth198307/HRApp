@@ -106,6 +106,7 @@ A comprehensive multi-tenant HR management application with three user roles (Su
 
 ### All Users
 - `POST /api/user/change-password` - Change own password (requires current password)
+- `POST /api/password-reset-request` - Request password reset (public, no auth required)
 
 ## Running the Application
 
@@ -123,10 +124,19 @@ npm run db:push      # Push database schema changes
 ### For All Users
 - **Change Password**: Click user menu in sidebar > "Change Password"
 - Requires current password and new password (min 8 characters)
+- **Forgot Password**: Click "Forgot your password?" on the login page to submit a reset request
+
+### Password Reset Request Workflow
+1. User clicks "Forgot your password?" on the login page
+2. User enters their email and submits the request
+3. Admin sees the request on their dashboard
+4. Admin resets the password via User Accounts (Org Admin) or Organizations > Manage Admins (Super Admin)
+5. Admin dismisses the request from the dashboard
 
 ### For Super Admin
 - **Reset Org Admin Password**: Organizations page > Click "Manage Admins" (Users icon) > Click "Reset Password" (Key icon)
 - Sets a new password directly without knowing the old password
+- **View Reset Requests**: Dashboard shows pending reset requests from all organizations
 
 ### Emergency Super Admin Password Reset (Database Command)
 If you're locked out of the Super Admin account, run this SQL command:
@@ -149,6 +159,7 @@ UPDATE app_users SET password = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.F
 ```
 
 ## Recent Changes
+- Added password reset request feature for offline password recovery workflow
 - Initial implementation of complete HR management system
 - Multi-tenant architecture with PostgreSQL
 - Role-based access control system

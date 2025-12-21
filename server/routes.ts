@@ -253,6 +253,14 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Access denied" });
       }
       
+      // Verify org admin can only complete requests for their org
+      if (req.appUser!.role === "org_admin") {
+        const request = await storage.getPasswordResetRequestById(req.params.id);
+        if (!request || request.organizationId !== req.appUser!.organizationId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      
       await storage.completePasswordResetRequest(req.params.id, req.appUser!.id);
       res.json({ message: "Request marked as completed" });
     } catch (error: any) {
@@ -265,6 +273,14 @@ export async function registerRoutes(
     try {
       if (req.appUser!.role !== "super_admin" && req.appUser!.role !== "org_admin") {
         return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Verify org admin can only dismiss requests for their org
+      if (req.appUser!.role === "org_admin") {
+        const request = await storage.getPasswordResetRequestById(req.params.id);
+        if (!request || request.organizationId !== req.appUser!.organizationId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
       }
       
       await storage.dismissPasswordResetRequest(req.params.id);

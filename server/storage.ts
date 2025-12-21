@@ -105,6 +105,7 @@ export interface IStorage {
   // Password Reset Requests
   createPasswordResetRequest(request: InsertPasswordResetRequest): Promise<PasswordResetRequest>;
   getPendingPasswordResetRequests(organizationId?: string): Promise<PasswordResetRequest[]>;
+  getPasswordResetRequestById(id: string): Promise<PasswordResetRequest | undefined>;
   completePasswordResetRequest(id: string, completedBy: string): Promise<void>;
   dismissPasswordResetRequest(id: string): Promise<void>;
 
@@ -499,6 +500,11 @@ export class DatabaseStorage implements IStorage {
   async createPasswordResetRequest(request: InsertPasswordResetRequest): Promise<PasswordResetRequest> {
     const [created] = await db.insert(passwordResetRequests).values(request).returning();
     return created;
+  }
+
+  async getPasswordResetRequestById(id: string): Promise<PasswordResetRequest | undefined> {
+    const [request] = await db.select().from(passwordResetRequests).where(eq(passwordResetRequests.id, id));
+    return request;
   }
 
   async getPendingPasswordResetRequests(organizationId?: string): Promise<PasswordResetRequest[]> {
