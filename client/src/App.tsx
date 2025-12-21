@@ -18,6 +18,7 @@ import NotFound from "@/pages/not-found";
 import SuperAdminDashboard from "@/pages/super-admin/dashboard";
 import Organizations from "@/pages/super-admin/organizations";
 import DefaultHolidays from "@/pages/super-admin/default-holidays";
+import ManageOrganization from "@/pages/super-admin/manage-organization";
 
 import OrgAdminDashboard from "@/pages/org-admin/dashboard";
 import Employees from "@/pages/org-admin/employees";
@@ -37,6 +38,7 @@ function SuperAdminRouter() {
     <Switch>
       <Route path="/" component={SuperAdminDashboard} />
       <Route path="/organizations" component={Organizations} />
+      <Route path="/manage-organization" component={ManageOrganization} />
       <Route path="/default-holidays" component={DefaultHolidays} />
       <Route component={NotFound} />
     </Switch>

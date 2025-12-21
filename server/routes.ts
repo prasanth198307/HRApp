@@ -4,9 +4,32 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { z } from "zod";
 import { storage } from "./storage";
 import type { AppUser } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, appUserMiddleware, hashPassword } from "./auth";
+
+const createOrgWithAdminSchema = z.object({
+  name: z.string().min(2),
+  industry: z.string().min(1),
+  address: z.string().nullable().optional().transform(v => v || null),
+  phone: z.string().nullable().optional().transform(v => v || null),
+  email: z.string().email().nullable().optional().or(z.literal("")).transform(v => v || null),
+  admin: z.object({
+    email: z.string().email(),
+    password: z.string().min(8),
+    firstName: z.string().min(1),
+    lastName: z.string().min(1),
+  }),
+});
+
+const updateOrgSchema = z.object({
+  name: z.string().min(2),
+  industry: z.string().min(1),
+  address: z.string().nullable().optional().transform(v => v || null),
+  phone: z.string().nullable().optional().transform(v => v || null),
+  email: z.string().email().nullable().optional().or(z.literal("")).transform(v => v || null),
+});
 
 function generateInviteToken(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -127,7 +150,35 @@ export async function registerRoutes(
 
   app.post("/api/organizations", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-      const org = await storage.createOrganization(req.body);
+      const parseResult = createOrgWithAdminSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: parseResult.error.flatten().fieldErrors 
+        });
+      }
+      
+      const { admin, ...orgData } = parseResult.data;
+      
+      const existingUser = await storage.getAppUserByEmail(admin.email);
+      if (existingUser) {
+        return res.status(400).json({ message: "A user with this email already exists" });
+      }
+      
+      const org = await storage.createOrganization(orgData);
+      
+      const hashedPassword = await hashPassword(admin.password);
+      await storage.createAppUser({
+        email: admin.email.toLowerCase(),
+        password: hashedPassword,
+        firstName: admin.firstName,
+        lastName: admin.lastName,
+        organizationId: org.id,
+        role: "org_admin",
+        isActive: true,
+        isPending: false,
+      });
+      
       res.status(201).json(org);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -136,7 +187,15 @@ export async function registerRoutes(
 
   app.patch("/api/organizations/:id", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-      const org = await storage.updateOrganization(req.params.id, req.body);
+      const parseResult = updateOrgSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: parseResult.error.flatten().fieldErrors 
+        });
+      }
+      
+      const org = await storage.updateOrganization(req.params.id, parseResult.data);
       if (!org) {
         return res.status(404).json({ message: "Organization not found" });
       }
@@ -216,6 +275,60 @@ export async function registerRoutes(
     try {
       await storage.deleteHoliday(req.params.id);
       res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Super Admin - Manage any organization's data
+  app.get("/api/super-admin/employees", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const organizationId = req.query.organizationId as string;
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      const employees = await storage.getEmployeesByOrg(organizationId);
+      res.json(employees);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/super-admin/attendance", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const organizationId = req.query.organizationId as string;
+      const month = req.query.month as string;
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      const records = await storage.getAttendanceByOrg(organizationId, month);
+      res.json(records);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/super-admin/attendance/bulk", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { records } = req.body;
+      if (!records || !Array.isArray(records)) {
+        return res.status(400).json({ message: "Records array is required" });
+      }
+      await storage.createOrUpdateAttendance(records);
+      res.json({ message: "Attendance updated successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/super-admin/payslips", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const organizationId = req.query.organizationId as string;
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      const payslips = await storage.getPayslipsByOrg(organizationId);
+      res.json(payslips);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

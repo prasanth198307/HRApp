@@ -38,6 +38,7 @@ import { useUserContext } from "@/lib/user-context";
 const superAdminNavItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Organizations", url: "/organizations", icon: Building2 },
+  { title: "Manage Organization", url: "/manage-organization", icon: Settings },
   { title: "Default Holidays", url: "/default-holidays", icon: CalendarDays },
 ];
 

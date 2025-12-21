@@ -45,12 +45,26 @@ import {
 import type { Organization, InsertOrganization } from "@shared/schema";
 import { industryOptions } from "@shared/schema";
 
-const organizationFormSchema = z.object({
+const baseOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   industry: z.string().min(1, "Please select an industry"),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
+});
+
+const createOrgSchema = baseOrgSchema.extend({
+  adminEmail: z.string().email("Valid admin email required"),
+  adminPassword: z.string().min(8, "Password must be at least 8 characters"),
+  adminFirstName: z.string().min(1, "First name required"),
+  adminLastName: z.string().min(1, "Last name required"),
+});
+
+const editOrgSchema = baseOrgSchema.extend({
+  adminEmail: z.string().optional(),
+  adminPassword: z.string().optional(),
+  adminFirstName: z.string().optional(),
+  adminLastName: z.string().optional(),
 });
 
 const adminFormSchema = z.object({
@@ -59,7 +73,8 @@ const adminFormSchema = z.object({
   lastName: z.string().min(1, "Last name required"),
 });
 
-type OrganizationFormValues = z.infer<typeof organizationFormSchema>;
+type CreateOrgFormValues = z.infer<typeof createOrgSchema>;
+type EditOrgFormValues = z.infer<typeof editOrgSchema>;
 type AdminFormValues = z.infer<typeof adminFormSchema>;
 
 export default function Organizations() {
@@ -73,8 +88,23 @@ export default function Organizations() {
     queryKey: ["/api/organizations"],
   });
 
-  const form = useForm<OrganizationFormValues>({
-    resolver: zodResolver(organizationFormSchema),
+  const createForm = useForm<CreateOrgFormValues>({
+    resolver: zodResolver(createOrgSchema),
+    defaultValues: {
+      name: "",
+      industry: "",
+      address: "",
+      phone: "",
+      email: "",
+      adminEmail: "",
+      adminPassword: "",
+      adminFirstName: "",
+      adminLastName: "",
+    },
+  });
+
+  const editForm = useForm<EditOrgFormValues>({
+    resolver: zodResolver(editOrgSchema),
     defaultValues: {
       name: "",
       industry: "",
@@ -100,7 +130,7 @@ export default function Organizations() {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       setCreateDialogOpen(false);
-      form.reset();
+      createForm.reset();
       toast({ title: "Organization created successfully" });
     },
     onError: (error: Error) => {
@@ -114,7 +144,7 @@ export default function Organizations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
       setEditingOrg(null);
-      form.reset();
+      editForm.reset();
       toast({ title: "Organization updated successfully" });
     },
     onError: (error: Error) => {
@@ -135,19 +165,33 @@ export default function Organizations() {
     },
   });
 
-  const onSubmit = (values: OrganizationFormValues) => {
-    const data: InsertOrganization = {
+  const onCreateSubmit = (values: CreateOrgFormValues) => {
+    const data = {
       name: values.name,
-      industry: values.industry as any,
+      industry: values.industry,
       address: values.address || null,
       phone: values.phone || null,
       email: values.email || null,
+      admin: {
+        email: values.adminEmail,
+        password: values.adminPassword,
+        firstName: values.adminFirstName,
+        lastName: values.adminLastName,
+      },
     };
+    createMutation.mutate(data as any);
+  };
 
+  const onEditSubmit = (values: EditOrgFormValues) => {
     if (editingOrg) {
+      const data = {
+        name: values.name,
+        industry: values.industry,
+        address: values.address || null,
+        phone: values.phone || null,
+        email: values.email || null,
+      };
       updateMutation.mutate({ id: editingOrg.id, data });
-    } else {
-      createMutation.mutate(data);
     }
   };
 
@@ -159,12 +203,16 @@ export default function Organizations() {
 
   const openEditDialog = (org: Organization) => {
     setEditingOrg(org);
-    form.reset({
-      name: org.name,
+    editForm.reset({
+      name: org.name || "",
       industry: org.industry || "",
       address: org.address || "",
       phone: org.phone || "",
       email: org.email || "",
+      adminEmail: "",
+      adminPassword: "",
+      adminFirstName: "",
+      adminLastName: "",
     });
   };
 
@@ -194,10 +242,10 @@ export default function Organizations() {
             <DialogHeader>
               <DialogTitle>Create Organization</DialogTitle>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <Form {...createForm}>
+              <form onSubmit={createForm.handleSubmit(onCreateSubmit)} className="space-y-4">
                 <FormField
-                  control={form.control}
+                  control={createForm.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
@@ -210,7 +258,7 @@ export default function Organizations() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={createForm.control}
                   name="industry"
                   render={({ field }) => (
                     <FormItem>
@@ -234,7 +282,7 @@ export default function Organizations() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={createForm.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
@@ -247,7 +295,7 @@ export default function Organizations() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={createForm.control}
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
@@ -260,13 +308,71 @@ export default function Organizations() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={createForm.control}
                   name="address"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Address</FormLabel>
                       <FormControl>
                         <Input placeholder="123 Business St" {...field} data-testid="input-org-address" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3">Organization Admin Account</h4>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={createForm.control}
+                    name="adminFirstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John" {...field} data-testid="input-admin-firstname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={createForm.control}
+                    name="adminLastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Doe" {...field} data-testid="input-admin-lastname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={createForm.control}
+                  name="adminEmail"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Admin Email *</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="admin@company.com" {...field} data-testid="input-admin-email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="adminPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Admin Password *</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Minimum 8 characters" {...field} data-testid="input-admin-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -395,30 +501,30 @@ export default function Organizations() {
           <DialogHeader>
             <DialogTitle>Edit Organization</DialogTitle>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
               <FormField
-                control={form.control}
+                control={editForm.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Organization Name *</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} data-testid="input-edit-org-name" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <FormField
-                control={form.control}
+                control={editForm.control}
                 name="industry"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Industry *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-edit-industry">
                           <SelectValue placeholder="Select industry" />
                         </SelectTrigger>
                       </FormControl>
@@ -435,39 +541,39 @@ export default function Organizations() {
                 )}
               />
               <FormField
-                control={form.control}
+                control={editForm.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} />
+                      <Input type="email" {...field} data-testid="input-edit-org-email" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <FormField
-                control={form.control}
+                control={editForm.control}
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Phone</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} data-testid="input-edit-org-phone" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <FormField
-                control={form.control}
+                control={editForm.control}
                 name="address"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Address</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} data-testid="input-edit-org-address" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -477,7 +583,7 @@ export default function Organizations() {
                 <Button type="button" variant="outline" onClick={() => setEditingOrg(null)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={updateMutation.isPending}>
+                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-org-edit">
                   {updateMutation.isPending ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
