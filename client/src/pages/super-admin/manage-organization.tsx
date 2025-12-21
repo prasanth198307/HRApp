@@ -25,9 +25,27 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, FileText, Calendar, ChevronLeft, ChevronRight, Save, Upload } from "lucide-react";
+import { Building2, Users, FileText, Calendar, ChevronLeft, ChevronRight, Save, Upload, CalendarDays, Plus, Trash2 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, getDay } from "date-fns";
-import type { Organization, Employee, Attendance, Payslip } from "@shared/schema";
+import type { Organization, Employee, Attendance, Payslip, Holiday } from "@shared/schema";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const attendanceStatuses = [
   { value: "present", label: "P", color: "bg-green-500" },
@@ -39,11 +57,29 @@ const attendanceStatuses = [
 
 const dayAbbreviations = ["S", "M", "T", "W", "T", "F", "S"];
 
+const holidayFormSchema = z.object({
+  name: z.string().min(1, "Holiday name required"),
+  date: z.string().min(1, "Date required"),
+  isNational: z.boolean().default(false),
+});
+
+type HolidayFormValues = z.infer<typeof holidayFormSchema>;
+
 export default function ManageOrganization() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [attendanceChanges, setAttendanceChanges] = useState<Record<string, Record<string, string>>>({});
+  const [holidayDialogOpen, setHolidayDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  const holidayForm = useForm<HolidayFormValues>({
+    resolver: zodResolver(holidayFormSchema),
+    defaultValues: {
+      name: "",
+      date: "",
+      isNational: false,
+    },
+  });
 
   const { data: organizations, isLoading: orgsLoading } = useQuery<Organization[]>({
     queryKey: ["/api/organizations"],
@@ -79,6 +115,41 @@ export default function ManageOrganization() {
       return res.json();
     },
     enabled: !!selectedOrgId,
+  });
+
+  const { data: holidays, isLoading: holidaysLoading } = useQuery<Holiday[]>({
+    queryKey: ["/api/super-admin/holidays", selectedOrgId],
+    queryFn: async () => {
+      if (!selectedOrgId) return [];
+      const res = await fetch(`/api/super-admin/holidays?organizationId=${selectedOrgId}`);
+      return res.json();
+    },
+    enabled: !!selectedOrgId,
+  });
+
+  const createHolidayMutation = useMutation({
+    mutationFn: (data: HolidayFormValues & { organizationId: string }) =>
+      apiRequest("POST", "/api/super-admin/holidays", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/holidays", selectedOrgId] });
+      setHolidayDialogOpen(false);
+      holidayForm.reset();
+      toast({ title: "Holiday added successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to add holiday", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteHolidayMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/super-admin/holidays/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/holidays", selectedOrgId] });
+      toast({ title: "Holiday deleted successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete holiday", description: error.message, variant: "destructive" });
+    },
   });
 
   const saveAttendanceMutation = useMutation({
@@ -146,6 +217,16 @@ export default function ManageOrganization() {
 
   const selectedOrg = organizations?.find((o) => o.id === selectedOrgId);
 
+  const onHolidaySubmit = (values: HolidayFormValues) => {
+    createHolidayMutation.mutate({
+      ...values,
+      organizationId: selectedOrgId,
+    });
+  };
+
+  const customHolidays = holidays?.filter((h) => h.isCustom) || [];
+  const defaultHolidays = holidays?.filter((h) => !h.isCustom) || [];
+
   return (
     <div className="space-y-6">
       <div>
@@ -186,7 +267,7 @@ export default function ManageOrganization() {
 
       {selectedOrgId && (
         <Tabs defaultValue="employees">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="grid w-full grid-cols-4 max-w-lg">
             <TabsTrigger value="employees" data-testid="tab-employees">
               <Users className="h-4 w-4 mr-2" />
               Employees
@@ -198,6 +279,10 @@ export default function ManageOrganization() {
             <TabsTrigger value="payslips" data-testid="tab-payslips">
               <FileText className="h-4 w-4 mr-2" />
               Payslips
+            </TabsTrigger>
+            <TabsTrigger value="holidays" data-testid="tab-holidays">
+              <CalendarDays className="h-4 w-4 mr-2" />
+              Holidays
             </TabsTrigger>
           </TabsList>
 
@@ -471,8 +556,180 @@ export default function ManageOrganization() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="holidays" className="mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Holidays - {selectedOrg?.name}</CardTitle>
+                    <CardDescription>
+                      Manage custom holidays for this organization
+                    </CardDescription>
+                  </div>
+                  <Button onClick={() => setHolidayDialogOpen(true)} data-testid="button-add-holiday">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Holiday
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {holidaysLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {customHolidays.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-3">Custom Holidays</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Holiday Name</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {customHolidays.map((holiday) => (
+                              <TableRow key={holiday.id} data-testid={`row-holiday-${holiday.id}`}>
+                                <TableCell>
+                                  {format(new Date(holiday.date), "MMM d, yyyy")}
+                                </TableCell>
+                                <TableCell className="font-medium">{holiday.name}</TableCell>
+                                <TableCell>
+                                  <Badge variant={holiday.isNational ? "default" : "secondary"}>
+                                    {holiday.isNational ? "National" : "Organization"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => deleteHolidayMutation.mutate(holiday.id)}
+                                    disabled={deleteHolidayMutation.isPending}
+                                    data-testid={`button-delete-holiday-${holiday.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {defaultHolidays.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-3">Default Holidays (from industry)</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Holiday Name</TableHead>
+                              <TableHead>Type</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {defaultHolidays.map((holiday) => (
+                              <TableRow key={holiday.id} data-testid={`row-default-holiday-${holiday.id}`}>
+                                <TableCell>
+                                  {format(new Date(holiday.date), "MMM d, yyyy")}
+                                </TableCell>
+                                <TableCell className="font-medium">{holiday.name}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {holiday.isNational ? "National" : "Industry Default"}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {customHolidays.length === 0 && defaultHolidays.length === 0 && (
+                      <p className="text-muted-foreground text-center py-8">
+                        No holidays configured for this organization
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       )}
+
+      <Dialog open={holidayDialogOpen} onOpenChange={setHolidayDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Add Custom Holiday</DialogTitle>
+          </DialogHeader>
+          <Form {...holidayForm}>
+            <form onSubmit={holidayForm.handleSubmit(onHolidaySubmit)} className="space-y-4">
+              <FormField
+                control={holidayForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Holiday Name *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Company Anniversary" {...field} data-testid="input-holiday-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={holidayForm.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} data-testid="input-holiday-date" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={holidayForm.control}
+                name="isNational"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-national-holiday"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>National Holiday</FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setHolidayDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createHolidayMutation.isPending} data-testid="button-save-holiday">
+                  {createHolidayMutation.isPending ? "Adding..." : "Add Holiday"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -362,6 +362,57 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/super-admin/holidays", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const organizationId = req.query.organizationId as string;
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      const org = await storage.getOrganization(organizationId);
+      const holidayList = await storage.getHolidaysByOrg(organizationId, org?.industry);
+      res.json(holidayList);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/super-admin/holidays", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { organizationId, name, date, isNational } = req.body;
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      const holiday = await storage.createHoliday({
+        organizationId,
+        name,
+        date,
+        isNational: isNational || false,
+        isCustom: true,
+      });
+      res.status(201).json(holiday);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/super-admin/holidays/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const holiday = await storage.updateHoliday(req.params.id, req.body);
+      res.json(holiday);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/super-admin/holidays/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      await storage.deleteHoliday(req.params.id);
+      res.json({ message: "Holiday deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/org/stats", requireAuth, requireOrgMember, async (req, res) => {
     try {
       const stats = await storage.getOrgStats(req.appUser!.organizationId!);
