@@ -65,6 +65,7 @@ const adminFormSchema = z.object({
   email: z.string().email("Valid email required"),
   firstName: z.string().min(1, "First name required"),
   lastName: z.string().min(1, "Last name required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 type EditOrgFormValues = z.infer<typeof editOrgSchema>;
@@ -156,6 +157,7 @@ export default function Organizations() {
       email: "",
       firstName: "",
       lastName: "",
+      password: "",
     },
   });
 
@@ -633,6 +635,19 @@ export default function Organizations() {
                     <FormLabel>Last Name *</FormLabel>
                     <FormControl>
                       <Input placeholder="Doe" {...field} data-testid="input-admin-lastname" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={adminForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password *</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Minimum 8 characters" {...field} data-testid="input-admin-password" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -404,10 +404,14 @@ export async function registerRoutes(
 
   app.post("/api/org-admins", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-      const { organizationId, email } = req.body;
+      const { organizationId, email, firstName, lastName, password } = req.body;
       
       if (!email || !organizationId) {
         return res.status(400).json({ message: "Email and organization are required" });
+      }
+      
+      if (!password || password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
       
       const existingByEmail = await storage.getAppUserByEmail(email);
@@ -415,20 +419,21 @@ export async function registerRoutes(
         return res.status(400).json({ message: "A user or invitation already exists for this email" });
       }
 
-      const inviteToken = generateInviteToken();
-      const tempPassword = await hashPassword(generateInviteToken());
+      const hashedPassword = await hashPassword(password);
       
       const appUser = await storage.createAppUser({
         email: email.toLowerCase(),
-        password: tempPassword,
-        inviteToken,
-        isPending: true,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        isPending: false,
         organizationId,
         role: "org_admin",
-        isActive: false,
+        isActive: true,
       });
       
-      res.status(201).json({ ...appUser, inviteToken });
+      const { password: _, ...safeUser } = appUser;
+      res.status(201).json(safeUser);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
