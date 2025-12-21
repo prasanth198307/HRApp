@@ -17,6 +17,7 @@ import {
   Building2,
   KeyRound,
   Clock,
+  Timer,
 } from "lucide-react";
 import {
   Sidebar,
@@ -66,6 +67,7 @@ const orgAdminNavItems = [
   { title: "Employees", url: "/employees", icon: Users },
   { title: "Attendance", url: "/attendance", icon: Calendar },
   { title: "Comp Off", url: "/comp-off", icon: Clock },
+  { title: "Time Reports", url: "/time-reports", icon: Timer },
   { title: "Payslips", url: "/payslips", icon: FileText },
   { title: "Leave Policies", url: "/leave-policies", icon: CalendarCheck },
   { title: "Leave Requests", url: "/leave-requests", icon: CalendarX },
@@ -77,6 +79,7 @@ const orgAdminNavItems = [
 const employeeNavItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "My Attendance", url: "/my-attendance", icon: Calendar },
+  { title: "My Time Entries", url: "/my-time-entries", icon: Timer },
   { title: "My Payslips", url: "/my-payslips", icon: FileText },
   { title: "My Leaves", url: "/my-leaves", icon: CalendarCheck },
   { title: "Holidays", url: "/holidays", icon: CalendarDays },

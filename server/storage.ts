@@ -736,12 +736,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Time Entries
-  async getTimeEntriesByEmployee(employeeId: string, date?: string): Promise<TimeEntry[]> {
-    if (date) {
+  async getTimeEntriesByEmployee(employeeId: string, startDate?: string, endDate?: string): Promise<TimeEntry[]> {
+    if (startDate && endDate) {
       return db.select().from(timeEntries)
         .where(and(
           eq(timeEntries.employeeId, employeeId),
-          eq(timeEntries.date, date)
+          gte(timeEntries.date, startDate),
+          lte(timeEntries.date, endDate)
         ))
         .orderBy(timeEntries.entryTime);
     }
@@ -750,13 +751,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(timeEntries.entryTime));
   }
 
-  async getTimeEntriesByOrg(organizationId: string, date: string): Promise<TimeEntry[]> {
+  async getTimeEntriesByOrg(organizationId: string, startDate?: string, endDate?: string): Promise<TimeEntry[]> {
+    if (startDate && endDate) {
+      return db.select().from(timeEntries)
+        .where(and(
+          eq(timeEntries.organizationId, organizationId),
+          gte(timeEntries.date, startDate),
+          lte(timeEntries.date, endDate)
+        ))
+        .orderBy(timeEntries.entryTime);
+    }
     return db.select().from(timeEntries)
-      .where(and(
-        eq(timeEntries.organizationId, organizationId),
-        eq(timeEntries.date, date)
-      ))
-      .orderBy(timeEntries.entryTime);
+      .where(eq(timeEntries.organizationId, organizationId))
+      .orderBy(desc(timeEntries.entryTime));
   }
 
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {

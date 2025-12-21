@@ -1429,8 +1429,9 @@ export async function registerRoutes(
       if (!req.appUser!.employeeId) {
         return res.json([]);
       }
-      const date = req.query.date as string | undefined;
-      const entries = await storage.getTimeEntriesByEmployee(req.appUser!.employeeId, date);
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const entries = await storage.getTimeEntriesByEmployee(req.appUser!.employeeId, startDate, endDate);
       res.json(entries);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1473,8 +1474,9 @@ export async function registerRoutes(
   // Time Entries - Org Admin endpoints
   app.get("/api/time-entries", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
-      const date = req.query.date as string || new Date().toISOString().split('T')[0];
-      const entries = await storage.getTimeEntriesByOrg(req.appUser!.organizationId!, date);
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const entries = await storage.getTimeEntriesByOrg(req.appUser!.organizationId!, startDate, endDate);
       res.json(entries);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1487,8 +1489,9 @@ export async function registerRoutes(
       if (!emp || emp.organizationId !== req.appUser!.organizationId) {
         return res.status(404).json({ message: "Employee not found" });
       }
-      const date = req.query.date as string | undefined;
-      const entries = await storage.getTimeEntriesByEmployee(req.params.employeeId, date);
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const entries = await storage.getTimeEntriesByEmployee(req.params.employeeId, startDate, endDate);
       res.json(entries);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

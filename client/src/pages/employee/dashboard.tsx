@@ -1,11 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserContext } from "@/lib/user-context";
-import { Calendar, FileText, CalendarDays, Clock } from "lucide-react";
-import type { Attendance, Payslip, Holiday } from "@shared/schema";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { Calendar, FileText, CalendarDays, Clock, LogIn, LogOut } from "lucide-react";
+import type { Attendance, Holiday, TimeEntry } from "@shared/schema";
+import { format } from "date-fns";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface EmployeeStats {
   presentThisMonth: number;
@@ -17,6 +20,7 @@ interface EmployeeStats {
 export default function EmployeeDashboard() {
   const { user } = useAuth();
   const { organization } = useUserContext();
+  const { toast } = useToast();
 
   const { data: stats, isLoading: statsLoading } = useQuery<EmployeeStats>({
     queryKey: ["/api/employee/stats"],
@@ -28,6 +32,34 @@ export default function EmployeeDashboard() {
 
   const { data: upcomingHolidays } = useQuery<Holiday[]>({
     queryKey: ["/api/holidays/upcoming"],
+  });
+
+  const { data: todayTimeEntries, isLoading: timeEntriesLoading } = useQuery<TimeEntry[]>({
+    queryKey: ["/api/employee/time-entries/today"],
+  });
+
+  // Determine current check-in status
+  const lastEntry = todayTimeEntries?.[todayTimeEntries.length - 1];
+  const isCheckedIn = lastEntry?.entryType === "check_in";
+
+  const checkInMutation = useMutation({
+    mutationFn: async (entryType: "check_in" | "check_out") => {
+      return apiRequest("POST", "/api/employee/time-entries", { entryType });
+    },
+    onSuccess: (_, entryType) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee/time-entries/today"] });
+      toast({
+        title: entryType === "check_in" ? "Checked In" : "Checked Out",
+        description: `Successfully ${entryType === "check_in" ? "checked in" : "checked out"} at ${format(new Date(), "h:mm a")}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to record time entry. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const statCards = [
@@ -104,6 +136,71 @@ export default function EmployeeDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Time Clock Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Time Clock
+          </CardTitle>
+          <span className="text-sm text-muted-foreground">
+            {format(new Date(), "EEEE, MMMM d, yyyy")}
+          </span>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`h-3 w-3 rounded-full ${
+                    isCheckedIn
+                      ? "bg-green-500"
+                      : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+                />
+                <span className="text-lg font-medium" data-testid="text-time-status">
+                  {timeEntriesLoading
+                    ? "Loading..."
+                    : isCheckedIn
+                    ? "Currently Checked In"
+                    : "Not Checked In"}
+                </span>
+              </div>
+              {todayTimeEntries && todayTimeEntries.length > 0 && (
+                <div className="text-sm text-muted-foreground">
+                  {todayTimeEntries.map((entry, idx) => (
+                    <span key={entry.id}>
+                      {entry.entryType === "check_in" ? "In: " : "Out: "}
+                      {format(new Date(entry.entryTime), "h:mm a")}
+                      {idx < todayTimeEntries.length - 1 && " | "}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={() =>
+                checkInMutation.mutate(isCheckedIn ? "check_out" : "check_in")
+              }
+              disabled={checkInMutation.isPending}
+              data-testid={isCheckedIn ? "button-check-out" : "button-check-in"}
+            >
+              {isCheckedIn ? (
+                <>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Check Out
+                </>
+              ) : (
+                <>
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Check In
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
