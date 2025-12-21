@@ -26,6 +26,8 @@ import Employees from "@/pages/org-admin/employees";
 import AttendancePage from "@/pages/org-admin/attendance";
 import PayslipsPage from "@/pages/org-admin/payslips";
 import HolidaysPage from "@/pages/org-admin/holidays";
+import LeavePoliciesPage from "@/pages/org-admin/leave-policies";
+import LeaveRequestsPage from "@/pages/org-admin/leave-requests";
 import ReportsPage from "@/pages/org-admin/reports";
 import UserAccountsPage from "@/pages/org-admin/user-accounts";
 
@@ -33,6 +35,7 @@ import EmployeeDashboard from "@/pages/employee/dashboard";
 import MyAttendance from "@/pages/employee/my-attendance";
 import MyPayslips from "@/pages/employee/my-payslips";
 import EmployeeHolidays from "@/pages/employee/holidays";
+import MyLeavesPage from "@/pages/employee/my-leaves";
 
 function SuperAdminRouter() {
   return (
@@ -55,6 +58,8 @@ function OrgAdminRouter() {
       <Route path="/attendance" component={AttendancePage} />
       <Route path="/payslips" component={PayslipsPage} />
       <Route path="/holidays" component={HolidaysPage} />
+      <Route path="/leave-policies" component={LeavePoliciesPage} />
+      <Route path="/leave-requests" component={LeaveRequestsPage} />
       <Route path="/reports" component={ReportsPage} />
       <Route path="/user-accounts" component={UserAccountsPage} />
       <Route component={NotFound} />
@@ -68,6 +73,7 @@ function EmployeeRouter() {
       <Route path="/" component={EmployeeDashboard} />
       <Route path="/my-attendance" component={MyAttendance} />
       <Route path="/my-payslips" component={MyPayslips} />
+      <Route path="/my-leaves" component={MyLeavesPage} />
       <Route path="/holidays" component={EmployeeHolidays} />
       <Route component={NotFound} />
     </Switch>

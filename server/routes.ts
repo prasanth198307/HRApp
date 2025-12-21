@@ -1058,6 +1058,20 @@ export async function registerRoutes(
       if (!req.appUser!.employeeId) {
         return res.status(400).json({ message: "Employee account required" });
       }
+
+      // Validate dates
+      const startDate = new Date(req.body.startDate);
+      const endDate = new Date(req.body.endDate);
+      
+      if (endDate < startDate) {
+        return res.status(400).json({ message: "End date must be after start date" });
+      }
+
+      // Prevent cross-year leave requests
+      if (startDate.getFullYear() !== endDate.getFullYear()) {
+        return res.status(400).json({ message: "Leave requests cannot span across years. Please submit separate requests for each year." });
+      }
+
       const request = await storage.createLeaveRequest({
         ...req.body,
         employeeId: req.appUser!.employeeId,
@@ -1117,6 +1131,83 @@ export async function registerRoutes(
         reviewedBy: req.appUser!.id,
         reviewedAt: new Date(),
       });
+
+      // If approved, deduct from leave balance and create attendance records
+      if (req.body.status === "approved" && request.policyId) {
+        // Validate request doesn't span years (defensive check for legacy data)
+        const startYear = new Date(request.startDate).getFullYear();
+        const endYear = new Date(request.endDate).getFullYear();
+        if (startYear !== endYear) {
+          // Revert the approval
+          await storage.updateLeaveRequest(req.params.id, {
+            status: "rejected",
+            reviewedBy: req.appUser!.id,
+            reviewedAt: new Date(),
+          });
+          return res.status(400).json({ 
+            message: `Cannot approve: Leave request spans multiple years (${startYear} to ${endYear}). Please reject this request and have the employee submit separate requests for each year.` 
+          });
+        }
+
+        // Use the year from the leave start date to get the correct balance
+        const leaveYear = startYear;
+        const balance = await storage.getEmployeeLeaveBalance(request.employeeId, request.policyId, leaveYear);
+        
+        if (!balance) {
+          // Revert the approval if no balance record exists
+          await storage.updateLeaveRequest(req.params.id, {
+            status: "pending",
+            reviewedBy: null,
+            reviewedAt: null,
+          });
+          return res.status(400).json({ 
+            message: `Cannot approve: No leave balance record found for year ${leaveYear}. Please ensure employee has initialized leave balances for this policy and year.` 
+          });
+        }
+
+        const totalDays = request.totalDays || 1;
+        const newUsed = balance.used + totalDays;
+        const newBalance = balance.currentBalance - totalDays;
+
+        await storage.updateEmployeeLeaveBalance(balance.id, {
+          used: newUsed,
+          currentBalance: newBalance,
+        });
+
+        // Create transaction record
+        await storage.createLeaveTransaction({
+          employeeId: request.employeeId,
+          balanceId: balance.id,
+          policyId: request.policyId,
+          organizationId: req.appUser!.organizationId!,
+          transactionType: "request",
+          amount: -totalDays,
+          balanceAfter: newBalance,
+          leaveRequestId: request.id,
+          notes: `Leave approved: ${request.startDate} to ${request.endDate}`,
+          createdBy: req.appUser!.id,
+        });
+
+        // Create attendance records for each leave day
+        const startDate = new Date(request.startDate);
+        const endDate = new Date(request.endDate);
+        const attendanceRecords: any[] = [];
+
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          attendanceRecords.push({
+            employeeId: request.employeeId,
+            organizationId: req.appUser!.organizationId!,
+            date: dateStr,
+            status: "leave",
+            notes: `${request.leaveType} - Approved leave`,
+          });
+        }
+
+        if (attendanceRecords.length > 0) {
+          await storage.createOrUpdateAttendance(attendanceRecords);
+        }
+      }
 
       // Notify employee about decision
       const empUsers = await storage.getAppUsersByOrg(req.appUser!.organizationId!);
@@ -1278,6 +1369,29 @@ export async function registerRoutes(
 
       const updatedBalance = await storage.getEmployeeLeaveBalance(req.params.employeeId, policyId, year);
       res.json(updatedBalance);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee Leave Policies - read-only access for employees with active employee status
+  app.get("/api/employee/leave-policies", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      // Require a valid employeeId for employee-level access
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+
+      // Verify employee is active
+      const emp = await storage.getEmployee(req.appUser!.employeeId);
+      if (!emp || emp.status !== 'active' || emp.organizationId !== req.appUser!.organizationId) {
+        return res.json([]);
+      }
+
+      const policies = await storage.getLeavePoliciesByOrg(req.appUser!.organizationId!);
+      // Only return active policies to employees
+      const activePolicies = policies.filter(p => p.isActive);
+      res.json(activePolicies);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

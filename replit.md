@@ -158,7 +158,46 @@ UPDATE app_users SET password = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.F
 -- This sets password to: password123
 ```
 
+## Leave Management System
+
+### Leave Types
+- **CL**: Casual Leave
+- **PL**: Privilege Leave  
+- **SL**: Sick Leave
+- **COMP_OFF**: Compensatory Off
+
+### Leave Policy Configuration (Org Admin)
+- Configure annual quota for each leave type
+- Set accrual method: monthly, yearly, or none
+- Configure carry forward: none, limited (with max limit), or unlimited
+- Enable/disable policies per organization
+
+### Employee Leave Balance
+- **Formula**: Opening + Accrued - Used + Adjustment = Current Balance
+- Balance tracked per employee, per policy, per year
+- Automatic initialization when employee is linked to organization
+
+### Leave Request Workflow
+1. Employee submits leave request (must be within same calendar year)
+2. Org Admin reviews pending requests
+3. On approval: Balance deducted, transaction recorded, attendance marked as "leave"
+4. On rejection: Employee notified, no balance changes
+
+### Design Decisions
+- **No cross-year requests**: Leave requests cannot span multiple calendar years. Employees must submit separate requests for each year.
+- **Balance year alignment**: Balance deductions use the leave start date's year
+- **Missing balance validation**: Approval fails if no balance record exists for the requested year
+
+### API Endpoints
+- `GET/POST/PATCH /api/leave-policies` - Org Admin: Manage leave policies
+- `GET /api/employee/leave-policies` - Employee: View active policies
+- `GET /api/employee/leave-balances` - Employee: View personal balances
+- `POST /api/employee/leave-requests` - Employee: Submit leave request
+- `GET /api/leave-requests` - Org Admin: View all requests
+- `PATCH /api/leave-requests/:id` - Org Admin: Approve/reject requests
+
 ## Recent Changes
+- Added comprehensive leave management system with policies, balances, and approval workflow
 - Added password reset request feature for offline password recovery workflow
 - Initial implementation of complete HR management system
 - Multi-tenant architecture with PostgreSQL

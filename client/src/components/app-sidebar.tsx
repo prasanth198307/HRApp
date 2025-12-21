@@ -7,6 +7,8 @@ import {
   BarChart3,
   Settings,
   CalendarDays,
+  CalendarCheck,
+  CalendarX,
   Home,
   UserPlus,
   LogOut,
@@ -63,6 +65,8 @@ const orgAdminNavItems = [
   { title: "Employees", url: "/employees", icon: Users },
   { title: "Attendance", url: "/attendance", icon: Calendar },
   { title: "Payslips", url: "/payslips", icon: FileText },
+  { title: "Leave Policies", url: "/leave-policies", icon: CalendarCheck },
+  { title: "Leave Requests", url: "/leave-requests", icon: CalendarX },
   { title: "Holidays", url: "/holidays", icon: CalendarDays },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "User Accounts", url: "/user-accounts", icon: UserPlus },
@@ -72,6 +76,7 @@ const employeeNavItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "My Attendance", url: "/my-attendance", icon: Calendar },
   { title: "My Payslips", url: "/my-payslips", icon: FileText },
+  { title: "My Leaves", url: "/my-leaves", icon: CalendarCheck },
   { title: "Holidays", url: "/holidays", icon: CalendarDays },
 ];
 
