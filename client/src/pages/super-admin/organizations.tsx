@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Plus, Search, Edit, UserPlus } from "lucide-react";
+import { Building2, Plus, Search, Edit, UserPlus, Power, PowerOff } from "lucide-react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -129,6 +129,18 @@ export default function Organizations() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to create admin", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      apiRequest("PATCH", `/api/organizations/${id}/status`, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
+      toast({ title: "Organization status updated successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update status", description: error.message, variant: "destructive" });
     },
   });
 
@@ -283,6 +295,20 @@ export default function Organizations() {
                             data-testid={`button-add-admin-${org.id}`}
                           >
                             <UserPlus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={org.isActive ? "ghost" : "ghost"}
+                            size="icon"
+                            onClick={() => toggleStatusMutation.mutate({ id: org.id, isActive: !org.isActive })}
+                            disabled={toggleStatusMutation.isPending}
+                            data-testid={`button-toggle-status-${org.id}`}
+                            title={org.isActive ? "Suspend organization" : "Activate organization"}
+                          >
+                            {org.isActive ? (
+                              <PowerOff className="h-4 w-4 text-destructive" />
+                            ) : (
+                              <Power className="h-4 w-4 text-green-600" />
+                            )}
                           </Button>
                         </div>
                       </TableCell>
