@@ -715,59 +715,129 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Organization not found" });
       }
 
-      let data: any[] = [];
-      let filename = "";
-      let headers: string[] = [];
-
-      switch (exportType) {
-        case "employees":
-          data = await storage.getEmployeesByOrg(organizationId);
-          headers = ["employeeCode", "firstName", "lastName", "email", "phone", "department", "designation", "dateOfJoining", "dateOfExit", "status", "salary", "address", "emergencyContact"];
-          filename = `${org.name.replace(/\s+/g, "_")}_employees.csv`;
-          break;
-
-        case "attendance":
-          const month = req.query.month as string || new Date().toISOString().slice(0, 7);
-          data = await storage.getAttendanceByOrg(organizationId, month);
-          headers = ["employeeId", "date", "status", "checkIn", "checkOut", "notes"];
-          filename = `${org.name.replace(/\s+/g, "_")}_attendance_${month}.csv`;
-          break;
-
-        case "leave-requests":
-          data = await storage.getLeaveRequestsByOrg(organizationId);
-          headers = ["employeeId", "leaveType", "startDate", "endDate", "totalDays", "isHalfDay", "halfDaySession", "reason", "status", "reviewedAt", "reviewNotes", "createdAt"];
-          filename = `${org.name.replace(/\s+/g, "_")}_leave_requests.csv`;
-          break;
-
-        case "holidays":
-          const holidayList = await storage.getHolidaysByOrg(organizationId, org.industry);
-          data = holidayList;
-          headers = ["name", "date", "isNational", "isCustom"];
-          filename = `${org.name.replace(/\s+/g, "_")}_holidays.csv`;
-          break;
-
-        case "leave-balances":
-          data = await storage.getAllLeaveBalancesByOrg(organizationId);
-          headers = ["employeeId", "policyId", "year", "openingBalance", "accruedBalance", "usedBalance", "adjustmentBalance", "currentBalance"];
-          filename = `${org.name.replace(/\s+/g, "_")}_leave_balances.csv`;
-          break;
-
-        default:
-          return res.status(400).json({ message: "Invalid export type" });
-      }
-
-      // Generate CSV
-      const escapeCSV = (val: any) => {
+      // Helper to serialize dates/values for CSV
+      const serializeValue = (val: any): string => {
         if (val === null || val === undefined) return "";
-        const str = String(val);
+        if (val instanceof Date) return val.toISOString().split("T")[0];
+        if (typeof val === "object" && val.toISOString) return val.toISOString().split("T")[0];
+        return String(val);
+      };
+
+      const escapeCSV = (val: any) => {
+        const str = serializeValue(val);
         if (str.includes(",") || str.includes('"') || str.includes("\n")) {
           return `"${str.replace(/"/g, '""')}"`;
         }
         return str;
       };
 
+      let rows: Record<string, any>[] = [];
+      let filename = "";
+      let headers: string[] = [];
+
+      switch (exportType) {
+        case "employees": {
+          const employees = await storage.getEmployeesByOrg(organizationId);
+          headers = ["employeeCode", "firstName", "lastName", "email", "phone", "department", "designation", "dateOfJoining", "dateOfExit", "status", "salary", "address", "emergencyContact"];
+          rows = employees.map(emp => ({
+            employeeCode: emp.employeeCode,
+            firstName: emp.firstName,
+            lastName: emp.lastName,
+            email: emp.email,
+            phone: emp.phone,
+            department: emp.department,
+            designation: emp.designation,
+            dateOfJoining: emp.dateOfJoining,
+            dateOfExit: emp.dateOfExit,
+            status: emp.status,
+            salary: emp.salary,
+            address: emp.address,
+            emergencyContact: emp.emergencyContact,
+          }));
+          filename = `${org.name.replace(/\s+/g, "_")}_employees.csv`;
+          break;
+        }
+
+        case "attendance": {
+          const month = req.query.month as string;
+          if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+            return res.status(400).json({ message: "Valid month parameter required (YYYY-MM)" });
+          }
+          const attendanceRecords = await storage.getAttendanceByOrg(organizationId, month);
+          headers = ["employeeCode", "employeeName", "date", "status", "checkIn", "checkOut", "notes"];
+          rows = attendanceRecords.map(att => ({
+            employeeCode: att.employee?.employeeCode || "",
+            employeeName: att.employee ? `${att.employee.firstName} ${att.employee.lastName}` : "",
+            date: att.date,
+            status: att.status,
+            checkIn: att.checkIn,
+            checkOut: att.checkOut,
+            notes: att.notes,
+          }));
+          filename = `${org.name.replace(/\s+/g, "_")}_attendance_${month}.csv`;
+          break;
+        }
+
+        case "leave-requests": {
+          const leaveRequests = await storage.getLeaveRequestsByOrg(organizationId);
+          headers = ["employeeCode", "employeeName", "leaveType", "startDate", "endDate", "totalDays", "isHalfDay", "halfDaySession", "reason", "status", "reviewedAt", "reviewNotes", "createdAt"];
+          rows = leaveRequests.map(lr => ({
+            employeeCode: lr.employee?.employeeCode || "",
+            employeeName: lr.employee ? `${lr.employee.firstName} ${lr.employee.lastName}` : "",
+            leaveType: lr.leaveType,
+            startDate: lr.startDate,
+            endDate: lr.endDate,
+            totalDays: lr.totalDays,
+            isHalfDay: lr.isHalfDay ? "Yes" : "No",
+            halfDaySession: lr.halfDaySession || "",
+            reason: lr.reason,
+            status: lr.status,
+            reviewedAt: lr.reviewedAt,
+            reviewNotes: lr.reviewNotes,
+            createdAt: lr.createdAt,
+          }));
+          filename = `${org.name.replace(/\s+/g, "_")}_leave_requests.csv`;
+          break;
+        }
+
+        case "holidays": {
+          const holidayList = await storage.getHolidaysByOrg(organizationId, org.industry);
+          headers = ["name", "date", "isNational", "isCustom"];
+          rows = holidayList.map(h => ({
+            name: h.name,
+            date: h.date,
+            isNational: h.isNational ? "Yes" : "No",
+            isCustom: h.isCustom ? "Yes" : "No",
+          }));
+          filename = `${org.name.replace(/\s+/g, "_")}_holidays.csv`;
+          break;
+        }
+
+        case "leave-balances": {
+          const balances = await storage.getAllLeaveBalancesByOrg(organizationId);
+          headers = ["employeeCode", "employeeName", "leaveType", "year", "openingBalance", "accruedBalance", "usedBalance", "adjustmentBalance", "currentBalance"];
+          rows = balances.map(b => ({
+            employeeCode: b.employee?.employeeCode || "",
+            employeeName: b.employee ? `${b.employee.firstName} ${b.employee.lastName}` : "",
+            leaveType: b.policy?.leaveType || "",
+            year: b.year,
+            openingBalance: b.openingBalance,
+            accruedBalance: b.accruedBalance,
+            usedBalance: b.usedBalance,
+            adjustmentBalance: b.adjustmentBalance,
+            currentBalance: b.currentBalance,
+          }));
+          filename = `${org.name.replace(/\s+/g, "_")}_leave_balances.csv`;
+          break;
+        }
+
+        default:
+          return res.status(400).json({ message: "Invalid export type" });
+      }
+
+      // Generate CSV
       const csvRows = [headers.join(",")];
-      for (const row of data) {
+      for (const row of rows) {
         const values = headers.map(h => escapeCSV(row[h]));
         csvRows.push(values.join(","));
       }

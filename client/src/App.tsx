@@ -20,6 +20,7 @@ import Organizations from "@/pages/super-admin/organizations";
 import OrganizationCreate from "@/pages/super-admin/organization-create";
 import DefaultHolidays from "@/pages/super-admin/default-holidays";
 import ManageOrganization from "@/pages/super-admin/manage-organization";
+import DataExportPage from "@/pages/super-admin/data-export";
 
 import OrgAdminDashboard from "@/pages/org-admin/dashboard";
 import Employees from "@/pages/org-admin/employees";
@@ -48,6 +49,7 @@ function SuperAdminRouter() {
       <Route path="/organizations/new" component={OrganizationCreate} />
       <Route path="/manage-organization" component={ManageOrganization} />
       <Route path="/default-holidays" component={DefaultHolidays} />
+      <Route path="/data-export" component={DataExportPage} />
       <Route component={NotFound} />
     </Switch>
   );

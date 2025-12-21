@@ -18,6 +18,7 @@ import {
   KeyRound,
   Clock,
   Timer,
+  Download,
 } from "lucide-react";
 import {
   Sidebar,
@@ -60,6 +61,7 @@ const superAdminNavItems = [
   { title: "Organizations", url: "/organizations", icon: Building2 },
   { title: "Manage Organization", url: "/manage-organization", icon: Settings },
   { title: "Default Holidays", url: "/default-holidays", icon: CalendarDays },
+  { title: "Data Export", url: "/data-export", icon: Download },
 ];
 
 const orgAdminNavItems = [
