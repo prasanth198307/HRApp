@@ -175,18 +175,28 @@ export default function LeaveRequestsPage() {
                 {filteredRequests.map((request) => {
                   const emp = getEmployee(request.employeeId);
                   const policy = getPolicy(request.policyId);
-                  const days = getDayCount(request.startDate, request.endDate);
+                  const totalDays = request.totalDays != null
+                    ? parseFloat(String(request.totalDays))
+                    : getDayCount(request.startDate, request.endDate);
+                  const isHalfDay = request.isHalfDay || totalDays === 0.5;
                   return (
                     <TableRow key={request.id} data-testid={`row-request-${request.id}`}>
                       <TableCell className="font-medium">
                         {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{policy?.code || request.leaveType}</Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant="outline">{policy?.code || request.leaveType}</Badge>
+                          {isHalfDay && (
+                            <Badge variant="secondary" className="text-xs">
+                              {request.halfDaySession || "Half"}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{format(parseISO(request.startDate), "MMM d, yyyy")}</TableCell>
                       <TableCell>{format(parseISO(request.endDate), "MMM d, yyyy")}</TableCell>
-                      <TableCell>{days}</TableCell>
+                      <TableCell>{totalDays}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{request.reason}</TableCell>
                       <TableCell>{getStatusBadge(request.status)}</TableCell>
                       <TableCell className="text-right">
