@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import Papa from "papaparse";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, FileText, Calendar, ChevronLeft, ChevronRight, Save, Upload, CalendarDays, Plus, Trash2 } from "lucide-react";
+import { Building2, Users, FileText, Calendar, ChevronLeft, ChevronRight, Save, Upload, CalendarDays, Plus, Trash2, Download } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, getDay } from "date-fns";
 import type { Organization, Employee, Attendance, Payslip, Holiday } from "@shared/schema";
 import {
@@ -70,6 +71,8 @@ export default function ManageOrganization() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [attendanceChanges, setAttendanceChanges] = useState<Record<string, Record<string, string>>>({});
   const [holidayDialogOpen, setHolidayDialogOpen] = useState(false);
+  const [bulkUploadDialogOpen, setBulkUploadDialogOpen] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{ success: number; errors: Array<{ row: number; message: string }> } | null>(null);
   const { toast } = useToast();
 
   const holidayForm = useForm<HolidayFormValues>({
@@ -165,6 +168,49 @@ export default function ManageOrganization() {
       toast({ title: "Failed to save attendance", description: error.message, variant: "destructive" });
     },
   });
+
+  const bulkUploadMutation = useMutation({
+    mutationFn: async (data: { employees: Record<string, string>[]; organizationId: string }) => {
+      const res = await apiRequest("POST", "/api/super-admin/employees/bulk", data);
+      return res.json() as Promise<{ success: number; errors: Array<{ row: number; message: string }> }>;
+    },
+    onSuccess: (data) => {
+      setUploadResults(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/employees", selectedOrgId] });
+      if (data.success > 0) {
+        toast({ title: `Successfully uploaded ${data.success} employee(s)` });
+      }
+      if (data.errors.length > 0) {
+        toast({ title: `${data.errors.length} row(s) failed`, variant: "destructive" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Bulk upload failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const employees = results.data as Record<string, string>[];
+        if (employees.length === 0) {
+          toast({ title: "No valid data found in file", variant: "destructive" });
+          return;
+        }
+        setUploadResults(null);
+        bulkUploadMutation.mutate({ employees, organizationId: selectedOrgId });
+      },
+      error: (error) => {
+        toast({ title: "Failed to parse CSV file", description: error.message, variant: "destructive" });
+      }
+    });
+    event.target.value = "";
+  };
 
   const daysInMonth = useMemo(() => {
     const start = startOfMonth(currentMonth);
@@ -289,10 +335,74 @@ export default function ManageOrganization() {
           <TabsContent value="employees" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Employees - {selectedOrg?.name}</CardTitle>
-                <CardDescription>
-                  {activeEmployees.length} active employees
-                </CardDescription>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Employees - {selectedOrg?.name}</CardTitle>
+                    <CardDescription>
+                      {activeEmployees.length} active employees
+                    </CardDescription>
+                  </div>
+                  <Dialog open={bulkUploadDialogOpen} onOpenChange={(open) => { setBulkUploadDialogOpen(open); if (!open) setUploadResults(null); }}>
+                    <Button variant="outline" onClick={() => setBulkUploadDialogOpen(true)} data-testid="button-bulk-upload-employees">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Bulk Upload
+                    </Button>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>Bulk Upload Employees</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                          Upload a CSV file with employee data for {selectedOrg?.name}. Download the template below to see the required format.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <a href="/employee_template.csv" download="employee_template.csv">
+                            <Button variant="outline" size="sm" data-testid="button-download-template">
+                              <Download className="mr-2 h-4 w-4" />
+                              Download Template
+                            </Button>
+                          </a>
+                        </div>
+                        <div className="border rounded-md p-4">
+                          <Input
+                            type="file"
+                            accept=".csv"
+                            onChange={handleFileUpload}
+                            disabled={bulkUploadMutation.isPending}
+                            data-testid="input-csv-file"
+                          />
+                          {bulkUploadMutation.isPending && (
+                            <p className="text-sm text-muted-foreground mt-2">Uploading...</p>
+                          )}
+                        </div>
+                        {uploadResults && (
+                          <div className="space-y-2">
+                            {uploadResults.success > 0 && (
+                              <p className="text-sm text-green-600">
+                                Successfully added {uploadResults.success} employee(s)
+                              </p>
+                            )}
+                            {uploadResults.errors.length > 0 && (
+                              <div className="border rounded-md p-3 bg-destructive/10">
+                                <p className="text-sm font-medium text-destructive mb-2">
+                                  {uploadResults.errors.length} row(s) failed:
+                                </p>
+                                <ul className="text-sm text-destructive space-y-1">
+                                  {uploadResults.errors.slice(0, 5).map((err, idx) => (
+                                    <li key={idx}>Row {err.row}: {err.message}</li>
+                                  ))}
+                                  {uploadResults.errors.length > 5 && (
+                                    <li>...and {uploadResults.errors.length - 5} more errors</li>
+                                  )}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 {employeesLoading ? (

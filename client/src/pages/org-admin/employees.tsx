@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import Papa from "papaparse";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -194,41 +195,27 @@ export default function Employees() {
     },
   });
 
-  const parseCSV = (text: string): Record<string, string>[] => {
-    const lines = text.trim().split('\n');
-    if (lines.length < 2) return [];
-    
-    const headers = lines[0].split(',').map(h => h.trim());
-    const rows: Record<string, string>[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
-      const row: Record<string, string> = {};
-      headers.forEach((header, idx) => {
-        row[header] = values[idx] || '';
-      });
-      rows.push(row);
-    }
-    
-    return rows;
-  };
-
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const employees = parseCSV(text);
-      if (employees.length === 0) {
-        toast({ title: "No valid data found in file", variant: "destructive" });
-        return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const employees = results.data as Record<string, string>[];
+        if (employees.length === 0) {
+          toast({ title: "No valid data found in file", variant: "destructive" });
+          return;
+        }
+        setUploadResults(null);
+        bulkUploadMutation.mutate(employees);
+      },
+      error: (error) => {
+        toast({ title: "Failed to parse CSV file", description: error.message, variant: "destructive" });
       }
-      setUploadResults(null);
-      bulkUploadMutation.mutate(employees);
-    };
-    reader.readAsText(file);
+    });
+    event.target.value = "";
   };
 
   const onSubmit = (values: EmployeeFormValues) => {
