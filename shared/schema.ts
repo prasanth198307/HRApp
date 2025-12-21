@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, date, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, date, timestamp, pgEnum, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -22,6 +22,9 @@ export const carryForwardTypeEnum = pgEnum("carry_forward_type", ["none", "limit
 export const leaveTransactionTypeEnum = pgEnum("leave_transaction_type", ["accrual", "request", "adjustment", "carry_forward", "lapse"]);
 export const notificationTypeEnum = pgEnum("notification_type", ["leave_request", "leave_approved", "leave_rejected", "onboarding_task", "task_completed", "general", "password_reset_request"]);
 export const onboardingTaskStatusEnum = pgEnum("onboarding_task_status", ["pending", "in_progress", "completed"]);
+export const timeEntryTypeEnum = pgEnum("time_entry_type", ["check_in", "check_out"]);
+export const halfDaySessionEnum = pgEnum("half_day_session", ["AM", "PM"]);
+export const compOffSourceEnum = pgEnum("comp_off_source", ["overtime", "holiday_work", "manual"]);
 
 // Organizations table
 export const organizations = pgTable("organizations", {
@@ -143,7 +146,9 @@ export const leaveRequests = pgTable("leave_requests", {
   leaveType: leaveTypeEnum("leave_type").notNull(),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
-  totalDays: integer("total_days").notNull().default(1), // Number of leave days requested
+  totalDays: numeric("total_days", { precision: 4, scale: 1 }).notNull().default("1"), // Support 0.5 for half days
+  isHalfDay: boolean("is_half_day").notNull().default(false), // True if requesting half day
+  halfDaySession: halfDaySessionEnum("half_day_session"), // AM or PM for half-day requests
   reason: text("reason"),
   status: leaveStatusEnum("status").notNull().default("pending"),
   reviewedBy: varchar("reviewed_by").references(() => appUsers.id),
@@ -202,11 +207,11 @@ export const employeeLeaveBalances = pgTable("employee_leave_balances", {
   policyId: varchar("policy_id").notNull().references(() => leavePolicies.id),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   year: integer("year").notNull(), // Financial year
-  openingBalance: integer("opening_balance").notNull().default(0), // Balance at start of year (carry forward)
-  accrued: integer("accrued").notNull().default(0), // Total accrued during the year
-  used: integer("used").notNull().default(0), // Total used during the year
-  adjustment: integer("adjustment").notNull().default(0), // Manual adjustments (+/-)
-  currentBalance: integer("current_balance").notNull().default(0), // Computed: opening + accrued - used + adjustment
+  openingBalance: numeric("opening_balance", { precision: 6, scale: 1 }).notNull().default("0"), // Balance at start of year (carry forward)
+  accrued: numeric("accrued", { precision: 6, scale: 1 }).notNull().default("0"), // Total accrued during the year
+  used: numeric("used", { precision: 6, scale: 1 }).notNull().default("0"), // Total used during the year (supports half days)
+  adjustment: numeric("adjustment", { precision: 6, scale: 1 }).notNull().default("0"), // Manual adjustments (+/-)
+  currentBalance: numeric("current_balance", { precision: 6, scale: 1 }).notNull().default("0"), // Computed: opening + accrued - used + adjustment
   lastAccruedAt: timestamp("last_accrued_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -219,8 +224,8 @@ export const leaveTransactions = pgTable("leave_transactions", {
   policyId: varchar("policy_id").notNull().references(() => leavePolicies.id),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   transactionType: leaveTransactionTypeEnum("transaction_type").notNull(),
-  amount: integer("amount").notNull(), // Positive for credit, negative for debit
-  balanceAfter: integer("balance_after").notNull(), // Balance after this transaction
+  amount: numeric("amount", { precision: 6, scale: 1 }).notNull(), // Positive for credit, negative for debit (supports 0.5)
+  balanceAfter: numeric("balance_after", { precision: 6, scale: 1 }).notNull(), // Balance after this transaction
   referenceId: varchar("reference_id"), // e.g., leave request ID
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => appUsers.id),
@@ -237,6 +242,35 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   relatedId: varchar("related_id"),
   isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Time Entries table (check-in/check-out tracking)
+export const timeEntries = pgTable("time_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  attendanceId: varchar("attendance_id").references(() => attendance.id),
+  date: date("date").notNull(),
+  entryType: timeEntryTypeEnum("entry_type").notNull(), // check_in or check_out
+  entryTime: timestamp("entry_time").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Comp Off Grants table (track comp off credits from overtime/holiday work)
+export const compOffGrants = pgTable("comp_off_grants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  workDate: date("work_date").notNull(), // Date when overtime/holiday work occurred
+  hoursWorked: numeric("hours_worked", { precision: 4, scale: 2 }).notNull(), // Hours worked
+  daysGranted: numeric("days_granted", { precision: 4, scale: 1 }).notNull(), // Comp off days earned (e.g., 0.5 or 1)
+  source: compOffSourceEnum("source").notNull(), // overtime, holiday_work, or manual
+  reason: text("reason"),
+  isApplied: boolean("is_applied").notNull().default(false), // Has this been added to balance
+  appliedAt: timestamp("applied_at"),
+  grantedBy: varchar("granted_by").references(() => appUsers.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -409,6 +443,16 @@ export const insertLeaveTransactionSchema = createInsertSchema(leaveTransactions
   createdAt: true,
 });
 
+export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompOffGrantSchema = createInsertSchema(compOffGrants).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
@@ -451,6 +495,12 @@ export type EmployeeLeaveBalance = typeof employeeLeaveBalances.$inferSelect;
 
 export type InsertLeaveTransaction = z.infer<typeof insertLeaveTransactionSchema>;
 export type LeaveTransaction = typeof leaveTransactions.$inferSelect;
+
+export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
+export type TimeEntry = typeof timeEntries.$inferSelect;
+
+export type InsertCompOffGrant = z.infer<typeof insertCompOffGrantSchema>;
+export type CompOffGrant = typeof compOffGrants.$inferSelect;
 
 // Industry options for frontend
 export const industryOptions = [
