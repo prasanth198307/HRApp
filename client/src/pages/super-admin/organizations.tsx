@@ -4,14 +4,12 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -31,6 +29,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Plus, Search, Edit, UserPlus } from "lucide-react";
+import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -53,13 +52,6 @@ const baseOrgSchema = z.object({
   email: z.string().email("Invalid email").optional().or(z.literal("")),
 });
 
-const createOrgSchema = baseOrgSchema.extend({
-  adminEmail: z.string().email("Valid admin email required"),
-  adminPassword: z.string().min(8, "Password must be at least 8 characters"),
-  adminFirstName: z.string().min(1, "First name required"),
-  adminLastName: z.string().min(1, "Last name required"),
-});
-
 const editOrgSchema = baseOrgSchema.extend({
   adminEmail: z.string().optional(),
   adminPassword: z.string().optional(),
@@ -73,34 +65,17 @@ const adminFormSchema = z.object({
   lastName: z.string().min(1, "Last name required"),
 });
 
-type CreateOrgFormValues = z.infer<typeof createOrgSchema>;
 type EditOrgFormValues = z.infer<typeof editOrgSchema>;
 type AdminFormValues = z.infer<typeof adminFormSchema>;
 
 export default function Organizations() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [addAdminOrg, setAddAdminOrg] = useState<Organization | null>(null);
   const { toast } = useToast();
 
   const { data: organizations, isLoading } = useQuery<Organization[]>({
     queryKey: ["/api/organizations"],
-  });
-
-  const createForm = useForm<CreateOrgFormValues>({
-    resolver: zodResolver(createOrgSchema),
-    defaultValues: {
-      name: "",
-      industry: "",
-      address: "",
-      phone: "",
-      email: "",
-      adminEmail: "",
-      adminPassword: "",
-      adminFirstName: "",
-      adminLastName: "",
-    },
   });
 
   const editForm = useForm<EditOrgFormValues>({
@@ -120,21 +95,6 @@ export default function Organizations() {
       email: "",
       firstName: "",
       lastName: "",
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data: InsertOrganization) =>
-      apiRequest("POST", "/api/organizations", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
-      setCreateDialogOpen(false);
-      createForm.reset();
-      toast({ title: "Organization created successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to create organization", description: error.message, variant: "destructive" });
     },
   });
 
@@ -165,28 +125,11 @@ export default function Organizations() {
     },
   });
 
-  const onCreateSubmit = (values: CreateOrgFormValues) => {
-    const data = {
-      name: values.name,
-      industry: values.industry,
-      address: values.address || null,
-      phone: values.phone || null,
-      email: values.email || null,
-      admin: {
-        email: values.adminEmail,
-        password: values.adminPassword,
-        firstName: values.adminFirstName,
-        lastName: values.adminLastName,
-      },
-    };
-    createMutation.mutate(data as any);
-  };
-
   const onEditSubmit = (values: EditOrgFormValues) => {
     if (editingOrg) {
       const data = {
         name: values.name,
-        industry: values.industry,
+        industry: values.industry as any,
         address: values.address || null,
         phone: values.phone || null,
         email: values.email || null,
@@ -231,165 +174,12 @@ export default function Organizations() {
             Manage all registered organizations
           </p>
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-org">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Organization
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create Organization</DialogTitle>
-            </DialogHeader>
-            <Form {...createForm}>
-              <form onSubmit={createForm.handleSubmit(onCreateSubmit)} className="space-y-4">
-                <FormField
-                  control={createForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Organization Name *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Acme Corp" {...field} data-testid="input-org-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="industry"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Industry *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-industry">
-                            <SelectValue placeholder="Select industry" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {industryOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="contact@acme.com" {...field} data-testid="input-org-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone</FormLabel>
-                      <FormControl>
-                        <Input placeholder="+1 234 567 8900" {...field} data-testid="input-org-phone" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Input placeholder="123 Business St" {...field} data-testid="input-org-address" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="border-t pt-4 mt-4">
-                  <h4 className="font-medium mb-3">Organization Admin Account</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={createForm.control}
-                    name="adminFirstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Name *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="John" {...field} data-testid="input-admin-firstname" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={createForm.control}
-                    name="adminLastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Doe" {...field} data-testid="input-admin-lastname" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={createForm.control}
-                  name="adminEmail"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Admin Email *</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="admin@company.com" {...field} data-testid="input-admin-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="adminPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Admin Password *</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="Minimum 8 characters" {...field} data-testid="input-admin-password" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-org">
-                    {createMutation.isPending ? "Creating..." : "Create Organization"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <Link href="/organizations/new">
+          <Button data-testid="button-add-org">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Organization
+          </Button>
+        </Link>
       </div>
 
       <Card>
