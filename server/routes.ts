@@ -1337,6 +1337,63 @@ export async function registerRoutes(
     next();
   });
 
+  // Helper function to calculate working days (excluding weekends and holidays)
+  async function calculateWorkingDays(
+    organizationId: string,
+    startDate: string,
+    endDate: string,
+    industry?: string
+  ): Promise<{ workingDays: number; excludedDates: { date: string; reason: string }[] }> {
+    const holidays = await storage.getHolidaysByOrg(organizationId, industry);
+    const holidayDates = new Set(holidays.map(h => h.date));
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    let workingDays = 0;
+    const excludedDates: { date: string; reason: string }[] = [];
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      const dayOfWeek = d.getDay();
+      
+      if (dayOfWeek === 0) {
+        excludedDates.push({ date: dateStr, reason: "Sunday" });
+      } else if (dayOfWeek === 6) {
+        excludedDates.push({ date: dateStr, reason: "Saturday" });
+      } else if (holidayDates.has(dateStr)) {
+        const holiday = holidays.find(h => h.date === dateStr);
+        excludedDates.push({ date: dateStr, reason: `Holiday: ${holiday?.name || 'Holiday'}` });
+      } else {
+        workingDays++;
+      }
+    }
+    
+    return { workingDays, excludedDates };
+  }
+
+  // Endpoint to calculate working days for leave request preview
+  app.get("/api/calculate-working-days", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
+      }
+      
+      const org = await storage.getOrganization(req.appUser!.organizationId!);
+      const result = await calculateWorkingDays(
+        req.appUser!.organizationId!,
+        startDate as string,
+        endDate as string,
+        org?.industry
+      );
+      
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Leave Requests - Employee endpoints
   app.get("/api/employee/leave-requests", requireAuth, requireOrgMember, async (req, res) => {
     try {
@@ -1369,8 +1426,26 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Leave requests cannot span across years. Please submit separate requests for each year." });
       }
 
+      // Calculate working days (excluding weekends and holidays) for non-half-day requests
+      let totalDays = req.body.totalDays;
+      if (!req.body.isHalfDay) {
+        const org = await storage.getOrganization(req.appUser!.organizationId!);
+        const { workingDays } = await calculateWorkingDays(
+          req.appUser!.organizationId!,
+          req.body.startDate,
+          req.body.endDate,
+          org?.industry
+        );
+        totalDays = String(workingDays);
+        
+        if (workingDays === 0) {
+          return res.status(400).json({ message: "No working days in the selected date range. The dates may fall on weekends or holidays." });
+        }
+      }
+
       const request = await storage.createLeaveRequest({
         ...req.body,
+        totalDays,
         employeeId: req.appUser!.employeeId,
         organizationId: req.appUser!.organizationId!,
         status: "pending",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarPlus, CalendarCheck, CalendarX } from "lucide-react";
+import { CalendarPlus, CalendarCheck, CalendarX, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -81,8 +82,15 @@ const leaveRequestSchema = z.object({
 
 type LeaveRequestFormValues = z.infer<typeof leaveRequestSchema>;
 
+interface WorkingDaysResult {
+  workingDays: number;
+  excludedDates: { date: string; reason: string }[];
+}
+
 export default function MyLeavesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [workingDaysInfo, setWorkingDaysInfo] = useState<WorkingDaysResult | null>(null);
+  const [calculatingDays, setCalculatingDays] = useState(false);
   const { toast } = useToast();
   const currentYear = new Date().getFullYear();
 
@@ -111,20 +119,56 @@ export default function MyLeavesPage() {
   });
 
   const isHalfDay = form.watch("isHalfDay");
+  const watchStartDate = form.watch("startDate");
+  const watchEndDate = form.watch("endDate");
+
+  useEffect(() => {
+    if (!isHalfDay && watchStartDate && watchEndDate && watchEndDate >= watchStartDate) {
+      setCalculatingDays(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        fetch(`/api/calculate-working-days?startDate=${watchStartDate}&endDate=${watchEndDate}`, {
+          credentials: "include",
+          signal: controller.signal,
+        })
+          .then(res => {
+            if (!res.ok) throw new Error("Failed to calculate");
+            return res.json();
+          })
+          .then((data: WorkingDaysResult) => {
+            setWorkingDaysInfo(data);
+            setCalculatingDays(false);
+          })
+          .catch((err) => {
+            if (err.name !== 'AbortError') {
+              setWorkingDaysInfo(null);
+              setCalculatingDays(false);
+            }
+          });
+      }, 300);
+      return () => {
+        clearTimeout(timeoutId);
+        controller.abort();
+        setCalculatingDays(false);
+      };
+    } else {
+      setWorkingDaysInfo(null);
+      setCalculatingDays(false);
+    }
+  }, [watchStartDate, watchEndDate, isHalfDay]);
 
   const submitMutation = useMutation({
     mutationFn: (data: LeaveRequestFormValues) => {
       const policy = policies?.find(p => p.id === data.policyId);
       const endDate = data.isHalfDay ? data.startDate : (data.endDate || data.startDate);
-      const baseDays = differenceInDays(parseISO(endDate), parseISO(data.startDate)) + 1;
-      const totalDays = data.isHalfDay ? 0.5 : baseDays;
+      const totalDays = data.isHalfDay ? "0.5" : "0";
       return apiRequest("POST", "/api/employee/leave-requests", {
         policyId: data.policyId,
         startDate: data.startDate,
         endDate: endDate,
         reason: data.reason,
         leaveType: policy?.code || "CL",
-        totalDays: String(totalDays),
+        totalDays,
         isHalfDay: data.isHalfDay,
         halfDaySession: data.isHalfDay ? data.halfDaySession : null,
       });
@@ -304,6 +348,48 @@ export default function MyLeavesPage() {
                     />
                   )}
                 </div>
+                {!isHalfDay && workingDaysInfo && (
+                  <div className={`rounded-md p-3 text-sm ${workingDaysInfo.workingDays === 0 ? 'bg-destructive/10 border border-destructive/20' : 'bg-muted'}`} data-testid="working-days-info">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Working days:</span>
+                      <span className={`text-lg font-bold ${workingDaysInfo.workingDays === 0 ? 'text-destructive' : ''}`}>{workingDaysInfo.workingDays}</span>
+                      {workingDaysInfo.excludedDates.length > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                              <Info className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium mb-1">Excluded dates:</p>
+                            <ul className="text-xs space-y-0.5">
+                              {workingDaysInfo.excludedDates.slice(0, 10).map((d, i) => (
+                                <li key={i}>{d.date}: {d.reason}</li>
+                              ))}
+                              {workingDaysInfo.excludedDates.length > 10 && (
+                                <li>...and {workingDaysInfo.excludedDates.length - 10} more</li>
+                              )}
+                            </ul>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    {workingDaysInfo.workingDays === 0 ? (
+                      <p className="text-xs text-destructive mt-1">
+                        All selected dates fall on weekends or holidays. Please select different dates.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Weekends and holidays are automatically excluded
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!isHalfDay && calculatingDays && (
+                  <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                    Calculating working days...
+                  </div>
+                )}
                 <FormField
                   control={form.control}
                   name="reason"
@@ -325,7 +411,11 @@ export default function MyLeavesPage() {
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitMutation.isPending} data-testid="button-submit">
+                  <Button 
+                    type="submit" 
+                    disabled={submitMutation.isPending || calculatingDays || (!isHalfDay && workingDaysInfo?.workingDays === 0)} 
+                    data-testid="button-submit"
+                  >
                     Submit Request
                   </Button>
                 </div>
@@ -364,10 +454,10 @@ export default function MyLeavesPage() {
                       <span>Used:</span>
                       <span>-{balance.used}</span>
                     </div>
-                    {balance.adjustment !== 0 && (
+                    {parseFloat(String(balance.adjustment)) !== 0 && (
                       <div className="flex justify-between">
                         <span>Adjustment:</span>
-                        <span>{balance.adjustment > 0 ? "+" : ""}{balance.adjustment}</span>
+                        <span>{parseFloat(String(balance.adjustment)) > 0 ? "+" : ""}{balance.adjustment}</span>
                       </div>
                     )}
                   </div>

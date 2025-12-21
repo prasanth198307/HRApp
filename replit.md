@@ -47,6 +47,7 @@ The application is built with a multi-tenant architecture ensuring complete data
     -   Leave request workflow with Org Admin approval/rejection.
     -   Support for half-day leave requests (AM/PM sessions).
     -   Compensatory Off (Comp Off) management for granting time off for overtime/holiday work.
+    -   **Holiday Calendar Integration:** Leave day calculations automatically exclude weekends (Saturday/Sunday) and holidays from the organization's holiday calendar. Employees see a real-time preview of working days when applying for leave.
 -   **Password Management:**
     -   User-initiated password changes.
     -   "Forgot Password" workflow with admin-mediated password resets.
