@@ -700,6 +700,87 @@ export async function registerRoutes(
     }
   });
 
+  // Data Export endpoints for Super Admin
+  app.get("/api/super-admin/export/:type", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const organizationId = req.query.organizationId as string;
+      const exportType = req.params.type;
+      
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+
+      const org = await storage.getOrganization(organizationId);
+      if (!org) {
+        return res.status(404).json({ message: "Organization not found" });
+      }
+
+      let data: any[] = [];
+      let filename = "";
+      let headers: string[] = [];
+
+      switch (exportType) {
+        case "employees":
+          data = await storage.getEmployeesByOrg(organizationId);
+          headers = ["employeeCode", "firstName", "lastName", "email", "phone", "department", "designation", "dateOfJoining", "dateOfExit", "status", "salary", "address", "emergencyContact"];
+          filename = `${org.name.replace(/\s+/g, "_")}_employees.csv`;
+          break;
+
+        case "attendance":
+          const month = req.query.month as string || new Date().toISOString().slice(0, 7);
+          data = await storage.getAttendanceByOrg(organizationId, month);
+          headers = ["employeeId", "date", "status", "checkIn", "checkOut", "notes"];
+          filename = `${org.name.replace(/\s+/g, "_")}_attendance_${month}.csv`;
+          break;
+
+        case "leave-requests":
+          data = await storage.getLeaveRequestsByOrg(organizationId);
+          headers = ["employeeId", "leaveType", "startDate", "endDate", "totalDays", "isHalfDay", "halfDaySession", "reason", "status", "reviewedAt", "reviewNotes", "createdAt"];
+          filename = `${org.name.replace(/\s+/g, "_")}_leave_requests.csv`;
+          break;
+
+        case "holidays":
+          const holidayList = await storage.getHolidaysByOrg(organizationId, org.industry);
+          data = holidayList;
+          headers = ["name", "date", "isNational", "isCustom"];
+          filename = `${org.name.replace(/\s+/g, "_")}_holidays.csv`;
+          break;
+
+        case "leave-balances":
+          data = await storage.getAllLeaveBalancesByOrg(organizationId);
+          headers = ["employeeId", "policyId", "year", "openingBalance", "accruedBalance", "usedBalance", "adjustmentBalance", "currentBalance"];
+          filename = `${org.name.replace(/\s+/g, "_")}_leave_balances.csv`;
+          break;
+
+        default:
+          return res.status(400).json({ message: "Invalid export type" });
+      }
+
+      // Generate CSV
+      const escapeCSV = (val: any) => {
+        if (val === null || val === undefined) return "";
+        const str = String(val);
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const csvRows = [headers.join(",")];
+      for (const row of data) {
+        const values = headers.map(h => escapeCSV(row[h]));
+        csvRows.push(values.join(","));
+      }
+      const csvContent = csvRows.join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csvContent);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/org/stats", requireAuth, requireOrgMember, async (req, res) => {
     try {
       const stats = await storage.getOrgStats(req.appUser!.organizationId!);
