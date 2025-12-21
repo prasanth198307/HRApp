@@ -1140,6 +1140,176 @@ export async function registerRoutes(
     }
   });
 
+  // Leave Policies - Org Admin endpoints
+  app.get("/api/leave-policies", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const policies = await storage.getLeavePoliciesByOrg(req.appUser!.organizationId!);
+      res.json(policies);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/leave-policies/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const policy = await storage.getLeavePolicy(req.params.id);
+      if (!policy || policy.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Leave policy not found" });
+      }
+      res.json(policy);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/leave-policies", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const policy = await storage.createLeavePolicy({
+        ...req.body,
+        organizationId: req.appUser!.organizationId!,
+      });
+      res.status(201).json(policy);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/leave-policies/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const policy = await storage.getLeavePolicy(req.params.id);
+      if (!policy || policy.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Leave policy not found" });
+      }
+      const updated = await storage.updateLeavePolicy(req.params.id, req.body);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/leave-policies/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const policy = await storage.getLeavePolicy(req.params.id);
+      if (!policy || policy.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Leave policy not found" });
+      }
+      await storage.deleteLeavePolicy(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee Leave Balances - Org Admin endpoints
+  app.get("/api/leave-balances", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const balances = await storage.getAllLeaveBalancesByOrg(req.appUser!.organizationId!, year);
+      res.json(balances);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/leave-balances/:employeeId", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const emp = await storage.getEmployee(req.params.employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      const balances = await storage.getEmployeeLeaveBalances(req.params.employeeId, year);
+      res.json(balances);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/leave-balances/:employeeId/initialize", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const year = parseInt(req.body.year) || new Date().getFullYear();
+      const emp = await storage.getEmployee(req.params.employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      await storage.initializeEmployeeBalances(req.params.employeeId, req.appUser!.organizationId!, year);
+      const balances = await storage.getEmployeeLeaveBalances(req.params.employeeId, year);
+      res.json(balances);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/leave-balances/:employeeId/adjust", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const { policyId, amount, notes } = req.body;
+      const year = parseInt(req.body.year) || new Date().getFullYear();
+      
+      const emp = await storage.getEmployee(req.params.employeeId);
+      if (!emp || emp.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      const balance = await storage.getEmployeeLeaveBalance(req.params.employeeId, policyId, year);
+      if (!balance) {
+        return res.status(404).json({ message: "Leave balance not found for this policy" });
+      }
+
+      const newBalance = balance.currentBalance + amount;
+      const newAdjustment = balance.adjustment + amount;
+
+      await storage.updateEmployeeLeaveBalance(balance.id, {
+        adjustment: newAdjustment,
+        currentBalance: newBalance,
+      });
+
+      // Create transaction record
+      await storage.createLeaveTransaction({
+        employeeId: req.params.employeeId,
+        balanceId: balance.id,
+        policyId,
+        organizationId: req.appUser!.organizationId!,
+        transactionType: "adjustment",
+        amount,
+        balanceAfter: newBalance,
+        notes,
+        createdBy: req.appUser!.id,
+      });
+
+      const updatedBalance = await storage.getEmployeeLeaveBalance(req.params.employeeId, policyId, year);
+      res.json(updatedBalance);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee Leave Balances - Employee endpoints
+  app.get("/api/employee/leave-balances", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const balances = await storage.getEmployeeLeaveBalances(req.appUser!.employeeId, year);
+      res.json(balances);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/employee/leave-transactions", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.json([]);
+      }
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      const transactions = await storage.getLeaveTransactionsByEmployee(req.appUser!.employeeId, year);
+      res.json(transactions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Onboarding Tasks - Org Admin endpoints
   app.get("/api/onboarding-tasks", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
