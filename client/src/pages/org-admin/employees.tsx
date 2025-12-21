@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Search, Edit, UserMinus, Eye } from "lucide-react";
+import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -144,6 +144,19 @@ export default function Employees() {
       setExitingEmployee(null);
       exitForm.reset();
       toast({ title: "Employee exit recorded successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to record exit", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const rejoinMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("POST", `/api/employees/${id}/rejoin`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/stats"] });
+      toast({ title: "Employee rejoined successfully" });
     },
     onError: (error: Error) => {
       toast({ title: "Failed to record exit", description: error.message, variant: "destructive" });
@@ -489,9 +502,22 @@ export default function Employees() {
                               variant="ghost"
                               size="icon"
                               onClick={() => setExitingEmployee(emp)}
+                              title="Record Exit"
                               data-testid={`button-exit-employee-${emp.id}`}
                             >
                               <UserMinus className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {emp.status === "exited" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => rejoinMutation.mutate(emp.id)}
+                              disabled={rejoinMutation.isPending}
+                              title="Rejoin Employee"
+                              data-testid={`button-rejoin-employee-${emp.id}`}
+                            >
+                              <UserPlus className="h-4 w-4" />
                             </Button>
                           )}
                         </div>

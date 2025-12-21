@@ -687,6 +687,30 @@ export async function registerRoutes(
     }
   });
 
+  // Rejoin an exited employee
+  app.post("/api/employees/:id/rejoin", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getEmployee(req.params.id);
+      if (!existing || existing.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      if (existing.status !== "exited") {
+        return res.status(400).json({ message: "Only exited employees can rejoin" });
+      }
+
+      const emp = await storage.updateEmployee(req.params.id, {
+        status: "active",
+        dateOfExit: null,
+        exitReason: null,
+        dateOfJoining: new Date().toISOString().split("T")[0], // New join date
+      });
+      res.json(emp);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const monthFormatRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
 
   app.get("/api/attendance", requireAuth, requireOrgMember, async (req, res) => {
