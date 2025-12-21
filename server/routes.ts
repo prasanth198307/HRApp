@@ -534,6 +534,81 @@ export async function registerRoutes(
     }
   });
 
+  // Super Admin: Bulk upload employees to any organization
+  app.post("/api/super-admin/employees/bulk", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { organizationId, employees: employeeData } = req.body;
+      
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      
+      if (!Array.isArray(employeeData) || employeeData.length === 0) {
+        return res.status(400).json({ message: "No employee data provided" });
+      }
+
+      const results: { success: number; errors: Array<{ row: number; message: string }> } = {
+        success: 0,
+        errors: []
+      };
+
+      for (let i = 0; i < employeeData.length; i++) {
+        const row = employeeData[i];
+        try {
+          // Validate required fields
+          if (!row.employeeCode || !row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
+            results.errors.push({ row: i + 1, message: "Missing required fields (employeeCode, firstName, lastName, email, dateOfJoining)" });
+            continue;
+          }
+
+          // Check for duplicate email
+          const existingByEmail = await storage.getEmployeeByEmail(organizationId, row.email);
+          if (existingByEmail) {
+            results.errors.push({ row: i + 1, message: `Employee with email ${row.email} already exists` });
+            continue;
+          }
+
+          // Check for duplicate employee code
+          const existingByCode = await storage.getEmployeeByCode(organizationId, row.employeeCode);
+          if (existingByCode) {
+            results.errors.push({ row: i + 1, message: `Employee with code ${row.employeeCode} already exists` });
+            continue;
+          }
+
+          const emp = await storage.createEmployee({
+            employeeCode: row.employeeCode,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            email: row.email,
+            phone: row.phone || null,
+            department: row.department || null,
+            designation: row.designation || null,
+            dateOfJoining: row.dateOfJoining,
+            salary: row.salary ? parseInt(row.salary) : null,
+            address: row.address || null,
+            emergencyContact: row.emergencyContact || null,
+            organizationId: organizationId,
+          });
+
+          // Create initial employment period
+          await storage.createEmploymentPeriod({
+            employeeId: emp.id,
+            organizationId: emp.organizationId,
+            startDate: emp.dateOfJoining,
+          });
+
+          results.success++;
+        } catch (err: any) {
+          results.errors.push({ row: i + 1, message: err.message });
+        }
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/super-admin/attendance", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const organizationId = req.query.organizationId as string;
@@ -658,6 +733,77 @@ export async function registerRoutes(
       });
 
       res.status(201).json(emp);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Bulk upload employees (Org Admin)
+  app.post("/api/employees/bulk", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const { employees: employeeData } = req.body;
+      
+      if (!Array.isArray(employeeData) || employeeData.length === 0) {
+        return res.status(400).json({ message: "No employee data provided" });
+      }
+
+      const results: { success: number; errors: Array<{ row: number; message: string }> } = {
+        success: 0,
+        errors: []
+      };
+
+      for (let i = 0; i < employeeData.length; i++) {
+        const row = employeeData[i];
+        try {
+          // Validate required fields
+          if (!row.employeeCode || !row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
+            results.errors.push({ row: i + 1, message: "Missing required fields (employeeCode, firstName, lastName, email, dateOfJoining)" });
+            continue;
+          }
+
+          // Check for duplicate email
+          const existingByEmail = await storage.getEmployeeByEmail(req.appUser!.organizationId!, row.email);
+          if (existingByEmail) {
+            results.errors.push({ row: i + 1, message: `Employee with email ${row.email} already exists` });
+            continue;
+          }
+
+          // Check for duplicate employee code
+          const existingByCode = await storage.getEmployeeByCode(req.appUser!.organizationId!, row.employeeCode);
+          if (existingByCode) {
+            results.errors.push({ row: i + 1, message: `Employee with code ${row.employeeCode} already exists` });
+            continue;
+          }
+
+          const emp = await storage.createEmployee({
+            employeeCode: row.employeeCode,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            email: row.email,
+            phone: row.phone || null,
+            department: row.department || null,
+            designation: row.designation || null,
+            dateOfJoining: row.dateOfJoining,
+            salary: row.salary ? parseInt(row.salary) : null,
+            address: row.address || null,
+            emergencyContact: row.emergencyContact || null,
+            organizationId: req.appUser!.organizationId!,
+          });
+
+          // Create initial employment period
+          await storage.createEmploymentPeriod({
+            employeeId: emp.id,
+            organizationId: emp.organizationId,
+            startDate: emp.dateOfJoining,
+          });
+
+          results.success++;
+        } catch (err: any) {
+          results.errors.push({ row: i + 1, message: err.message });
+        }
+      }
+
+      res.json(results);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
