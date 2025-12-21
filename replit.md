@@ -228,7 +228,29 @@ Comp Off allows organizations to grant compensatory time off to employees for ov
 - `GET /api/leave-requests` - Org Admin: View all requests
 - `PATCH /api/leave-requests/:id` - Org Admin: Approve/reject requests
 
+## Time Tracking System
+
+### Employee Time Clock
+- Check-in/check-out buttons on employee dashboard
+- Real-time status display showing current work session
+- Automatic time calculation with duration display
+
+### Time Entry Pages
+- **Employee > My Time Entries**: Personal time log history with monthly filtering
+- **Org Admin > Time Reports**: Organization-wide time reports with monthly filtering
+- Each day shows check-in/check-out times and total hours worked
+
+### API Endpoints
+- `GET /api/employee/time-entries?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` - Personal time entries
+- `GET /api/employee/time-entries/today` - Today's check-in/out entries
+- `POST /api/time-entries` - Create check-in or check-out entry
+- `GET /api/time-entries?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` - Org Admin: All employee time entries
+
 ## Recent Changes
+- Added time clock feature with check-in/check-out functionality on employee dashboard
+- Added My Time Entries page for employees to view their time logs with monthly filtering
+- Added Time Reports page for Org Admins to view all employee working hours
+- Fixed date range filtering for time entries using startDate/endDate query parameters
 - Added Comp Off management page for Org Admins to grant compensatory leave
 - Added half-day leave request support (AM/PM sessions) for employees
 - Added visual indicators for half-day leaves in request history tables
