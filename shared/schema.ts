@@ -80,6 +80,18 @@ export const employees = pgTable("employees", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Employment Periods table (tracks employment history - join/exit cycles)
+export const employmentPeriods = pgTable("employment_periods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  exitReason: text("exit_reason"),
+  rejoinNotes: text("rejoin_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Attendance table
 export const attendance = pgTable("attendance", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -283,6 +295,11 @@ export const insertEmployeeSchema = createInsertSchema(employees).omit({
   createdAt: true,
 });
 
+export const insertEmploymentPeriodSchema = createInsertSchema(employmentPeriods).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertAttendanceSchema = createInsertSchema(attendance).omit({
   id: true,
   createdAt: true,
@@ -330,6 +347,9 @@ export type AppUser = typeof appUsers.$inferSelect;
 
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
+
+export type InsertEmploymentPeriod = z.infer<typeof insertEmploymentPeriodSchema>;
+export type EmploymentPeriod = typeof employmentPeriods.$inferSelect;
 
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type Attendance = typeof attendance.$inferSelect;
