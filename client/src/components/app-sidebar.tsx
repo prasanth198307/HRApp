@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useState } from "react";
 import {
   Users,
   Calendar,
@@ -12,6 +13,7 @@ import {
   ChevronDown,
   Heart,
   Building2,
+  KeyRound,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,10 +32,24 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserContext } from "@/lib/user-context";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const superAdminNavItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -63,6 +79,41 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { isSuperAdmin, isOrgAdmin, organization } = useUserContext();
+  const { toast } = useToast();
+  
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      return apiRequest("POST", "/api/user/change-password", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Password changed successfully" });
+      setPasswordDialogOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to change password", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Passwords don't match", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+      return;
+    }
+    changePasswordMutation.mutate({ currentPassword, newPassword });
+  };
 
   const navItems = isSuperAdmin
     ? superAdminNavItems
@@ -77,6 +128,61 @@ export function AppSidebar() {
   };
 
   return (
+    <>
+    <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change Password</DialogTitle>
+          <DialogDescription>
+            Enter your current password and choose a new password.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current Password</Label>
+            <Input
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              data-testid="input-current-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New Password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+              data-testid="input-new-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              data-testid="input-confirm-password"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={changePasswordMutation.isPending} data-testid="button-submit-password">
+              {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
@@ -128,7 +234,6 @@ export function AppSidebar() {
               data-testid="button-user-menu"
             >
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.profileImageUrl || undefined} />
                 <AvatarFallback>
                   {getInitials(user?.firstName, user?.lastName)}
                 </AvatarFallback>
@@ -145,6 +250,11 @@ export function AppSidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={() => setPasswordDialogOpen(true)} data-testid="button-change-password">
+              <KeyRound className="mr-2 h-4 w-4" />
+              <span>Change Password</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => logout()} data-testid="button-logout">
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log out</span>
@@ -153,5 +263,6 @@ export function AppSidebar() {
         </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
+    </>
   );
 }

@@ -10,7 +10,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Plus, Search, Edit, UserPlus, Power, PowerOff } from "lucide-react";
+import { Building2, Plus, Search, Edit, UserPlus, Power, PowerOff, Users, KeyRound } from "lucide-react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -68,14 +70,53 @@ const adminFormSchema = z.object({
 type EditOrgFormValues = z.infer<typeof editOrgSchema>;
 type AdminFormValues = z.infer<typeof adminFormSchema>;
 
+interface OrgAdmin {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  isActive: boolean;
+  isPending: boolean;
+}
+
 export default function Organizations() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [addAdminOrg, setAddAdminOrg] = useState<Organization | null>(null);
+  const [manageAdminsOrg, setManageAdminsOrg] = useState<Organization | null>(null);
+  const [resetPasswordAdmin, setResetPasswordAdmin] = useState<OrgAdmin | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   const { toast } = useToast();
 
   const { data: organizations, isLoading } = useQuery<Organization[]>({
     queryKey: ["/api/organizations"],
+  });
+
+  const { data: orgAdmins, isLoading: adminsLoading } = useQuery<OrgAdmin[]>({
+    queryKey: ["/api/org-admins", manageAdminsOrg?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/org-admins/${manageAdminsOrg!.id}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch admins");
+      return res.json();
+    },
+    enabled: !!manageAdminsOrg,
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      return apiRequest("POST", `/api/admin/reset-password/${userId}`, { newPassword });
+    },
+    onSuccess: () => {
+      toast({ title: "Password reset successfully" });
+      setResetPasswordAdmin(null);
+      setNewPassword("");
+      queryClient.invalidateQueries({ queryKey: ["/api/org-admins", manageAdminsOrg?.id] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to reset password", description: error.message, variant: "destructive" });
+    },
   });
 
   const editForm = useForm<EditOrgFormValues>({
@@ -293,8 +334,18 @@ export default function Organizations() {
                             size="icon"
                             onClick={() => setAddAdminOrg(org)}
                             data-testid={`button-add-admin-${org.id}`}
+                            title="Add new admin"
                           >
                             <UserPlus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setManageAdminsOrg(org)}
+                            data-testid={`button-manage-admins-${org.id}`}
+                            title="Manage admins"
+                          >
+                            <Users className="h-4 w-4" />
                           </Button>
                           <Button
                             variant={org.isActive ? "ghost" : "ghost"}
@@ -584,6 +635,107 @@ export default function Organizations() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!manageAdminsOrg} onOpenChange={(open) => !open && setManageAdminsOrg(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Organization Admins</DialogTitle>
+            <DialogDescription>
+              Manage admin accounts for {manageAdminsOrg?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {adminsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : orgAdmins && orgAdmins.length > 0 ? (
+            <div className="space-y-2">
+              {orgAdmins.map((admin) => (
+                <div
+                  key={admin.id}
+                  className="flex items-center justify-between gap-4 p-3 border rounded-md"
+                  data-testid={`admin-row-${admin.id}`}
+                >
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {admin.firstName} {admin.lastName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{admin.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={admin.isPending ? "secondary" : admin.isActive ? "default" : "destructive"}>
+                      {admin.isPending ? "Pending" : admin.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setResetPasswordAdmin(admin)}
+                      title="Reset password"
+                      data-testid={`button-reset-password-${admin.id}`}
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-4">No admins found for this organization</p>
+          )}
+          <div className="flex justify-end pt-4">
+            <Button variant="outline" onClick={() => setManageAdminsOrg(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!resetPasswordAdmin} onOpenChange={(open) => !open && setResetPasswordAdmin(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {resetPasswordAdmin?.firstName} {resetPasswordAdmin?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (resetPasswordAdmin && newPassword.length >= 8) {
+                resetPasswordMutation.mutate({ userId: resetPasswordAdmin.id, newPassword });
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={8}
+                placeholder="Minimum 8 characters"
+                required
+                data-testid="input-reset-password"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setResetPasswordAdmin(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={resetPasswordMutation.isPending || newPassword.length < 8}
+                data-testid="button-confirm-reset-password"
+              >
+                {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

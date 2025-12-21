@@ -46,6 +46,7 @@ export interface IStorage {
   getAllAppUsers(): Promise<AppUser[]>;
   createAppUser(user: InsertAppUser): Promise<AppUser>;
   updateAppUser(id: string, data: Partial<InsertAppUser>): Promise<AppUser | undefined>;
+  updateAppUserPassword(id: string, hashedPassword: string): Promise<void>;
   
   // Employees
   getEmployeesByOrg(organizationId: string): Promise<Employee[]>;
@@ -184,6 +185,10 @@ export class DatabaseStorage implements IStorage {
   async updateAppUser(id: string, data: Partial<InsertAppUser>): Promise<AppUser | undefined> {
     const [updated] = await db.update(appUsers).set(data).where(eq(appUsers.id, id)).returning();
     return updated;
+  }
+
+  async updateAppUserPassword(id: string, hashedPassword: string): Promise<void> {
+    await db.update(appUsers).set({ password: hashedPassword }).where(eq(appUsers.id, id));
   }
 
   // Employees

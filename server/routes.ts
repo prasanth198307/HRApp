@@ -7,7 +7,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import { storage } from "./storage";
 import type { AppUser } from "@shared/schema";
-import { setupAuth, registerAuthRoutes, appUserMiddleware, hashPassword } from "./auth";
+import { setupAuth, registerAuthRoutes, appUserMiddleware, hashPassword, verifyPassword } from "./auth";
 
 const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const tanRegex = /^[A-Z]{4}[0-9]{5}[A-Z]$/;
@@ -135,6 +135,66 @@ export async function registerRoutes(
       appUser: req.appUser,
       organization: req.appUser?.organization || null,
     });
+  });
+
+  // Change own password (for any logged-in user)
+  app.post("/api/user/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current password and new password are required" });
+      }
+      
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      }
+      
+      const user = await storage.getAppUserById(req.appUser!.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const isValid = await verifyPassword(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+      
+      const hashedNewPassword = await hashPassword(newPassword);
+      await storage.updateAppUserPassword(user.id, hashedNewPassword);
+      
+      res.json({ message: "Password changed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Super Admin: Reset user password (sets a new password directly)
+  app.post("/api/admin/reset-password/:userId", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { newPassword } = req.body;
+      
+      if (!newPassword || newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      }
+      
+      const user = await storage.getAppUserById(req.params.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Don't allow resetting super admin's own password through this endpoint
+      if (user.role === "super_admin") {
+        return res.status(403).json({ message: "Cannot reset super admin password through this endpoint" });
+      }
+      
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateAppUserPassword(user.id, hashedPassword);
+      
+      res.json({ message: "Password reset successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.get("/api/invite/check", async (req, res) => {
@@ -276,6 +336,19 @@ export async function registerRoutes(
       });
       
       res.status(201).json({ ...appUser, inviteToken });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get org admins for a specific organization (Super Admin only)
+  app.get("/api/org-admins/:organizationId", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAppUsersByOrg(req.params.organizationId);
+      const orgAdmins = users.filter(u => u.role === "org_admin");
+      // Return safe user info (no password)
+      const safeAdmins = orgAdmins.map(({ password, ...rest }) => rest);
+      res.json(safeAdmins);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

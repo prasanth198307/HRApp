@@ -9,7 +9,7 @@ A comprehensive multi-tenant HR management application with three user roles (Su
 - **Frontend**: React with TypeScript, Vite, TailwindCSS, Shadcn UI
 - **Backend**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **Authentication**: Replit Auth (OIDC)
+- **Authentication**: Custom email/password (bcrypt hashing, express-session)
 - **State Management**: TanStack Query
 
 ### Key Features
@@ -83,6 +83,8 @@ A comprehensive multi-tenant HR management application with three user roles (Su
 - `GET/POST /api/organizations` - Manage organizations
 - `PATCH /api/organizations/:id` - Update organization
 - `POST /api/org-admins` - Create org admin account
+- `GET /api/org-admins/:organizationId` - Get org admins for an organization
+- `POST /api/admin/reset-password/:userId` - Reset any user's password
 - `GET/POST/PATCH/DELETE /api/admin/holidays` - Default holidays
 
 ### Organization Admin
@@ -102,6 +104,9 @@ A comprehensive multi-tenant HR management application with three user roles (Su
 - `GET /api/employee/attendance` - Personal attendance
 - `GET /api/employee/payslips` - Personal payslips
 
+### All Users
+- `POST /api/user/change-password` - Change own password (requires current password)
+
 ## Running the Application
 
 ```bash
@@ -113,6 +118,36 @@ npm run db:push      # Push database schema changes
 - Dark mode support with theme persistence
 - Responsive design for all screen sizes
 
+## Password Management
+
+### For All Users
+- **Change Password**: Click user menu in sidebar > "Change Password"
+- Requires current password and new password (min 8 characters)
+
+### For Super Admin
+- **Reset Org Admin Password**: Organizations page > Click "Manage Admins" (Users icon) > Click "Reset Password" (Key icon)
+- Sets a new password directly without knowing the old password
+
+### Emergency Super Admin Password Reset (Database Command)
+If you're locked out of the Super Admin account, run this SQL command:
+
+```sql
+-- First, generate a bcrypt hash for your new password using Node.js:
+-- const bcrypt = require('bcryptjs');
+-- bcrypt.hash('yournewpassword', 12).then(console.log);
+
+-- Then update the password in the database:
+UPDATE app_users 
+SET password = 'YOUR_BCRYPT_HASH_HERE' 
+WHERE email = 'admin@test.com';
+```
+
+Or use this one-liner in the database tool:
+```sql
+UPDATE app_users SET password = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Fqj.c6.6.K.QE.' WHERE email = 'admin@test.com';
+-- This sets password to: password123
+```
+
 ## Recent Changes
 - Initial implementation of complete HR management system
 - Multi-tenant architecture with PostgreSQL
@@ -121,3 +156,4 @@ npm run db:push      # Push database schema changes
 - Attendance tracking with monthly calendar view
 - Payslip upload and download functionality
 - Industry-based holiday calendar with customization
+- Password management features (change password, reset password)
