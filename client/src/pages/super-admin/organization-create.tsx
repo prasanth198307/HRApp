@@ -40,7 +40,6 @@ const createOrgSchema = z.object({
   tanNumber: z.string().optional(),
   cinNumber: z.string().optional(),
   udyamNumber: z.string().optional(),
-  fssaiNumber: z.string().optional(),
   adminEmail: z.string().email("Valid admin email required"),
   adminPassword: z.string().min(8, "Password must be at least 8 characters"),
   adminFirstName: z.string().min(1, "First name required"),
@@ -68,7 +67,6 @@ export default function OrganizationCreate() {
       tanNumber: "",
       cinNumber: "",
       udyamNumber: "",
-      fssaiNumber: "",
       adminEmail: "",
       adminPassword: "",
       adminFirstName: "",
@@ -104,7 +102,6 @@ export default function OrganizationCreate() {
       tanNumber: values.tanNumber || null,
       cinNumber: values.cinNumber || null,
       udyamNumber: values.udyamNumber || null,
-      fssaiNumber: values.fssaiNumber || null,
       admin: {
         email: values.adminEmail,
         password: values.adminPassword,
@@ -307,19 +304,6 @@ export default function OrganizationCreate() {
                         <FormLabel>UDYAM Number</FormLabel>
                         <FormControl>
                           <Input placeholder="Udyam-XX-00-0000000" {...field} data-testid="input-udyam-number" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="fssaiNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>FSSAI Number</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Food license number" {...field} data-testid="input-fssai-number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

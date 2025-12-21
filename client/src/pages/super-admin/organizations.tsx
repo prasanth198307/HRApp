@@ -57,7 +57,6 @@ const editOrgSchema = z.object({
   tanNumber: z.string().optional(),
   cinNumber: z.string().optional(),
   udyamNumber: z.string().optional(),
-  fssaiNumber: z.string().optional(),
 });
 
 const adminFormSchema = z.object({
@@ -94,7 +93,6 @@ export default function Organizations() {
       tanNumber: "",
       cinNumber: "",
       udyamNumber: "",
-      fssaiNumber: "",
     },
   });
 
@@ -149,7 +147,6 @@ export default function Organizations() {
         tanNumber: values.tanNumber || null,
         cinNumber: values.cinNumber || null,
         udyamNumber: values.udyamNumber || null,
-        fssaiNumber: values.fssaiNumber || null,
       };
       updateMutation.mutate({ id: editingOrg.id, data });
     }
@@ -176,7 +173,6 @@ export default function Organizations() {
       tanNumber: org.tanNumber || "",
       cinNumber: org.cinNumber || "",
       udyamNumber: org.udyamNumber || "",
-      fssaiNumber: org.fssaiNumber || "",
     });
   };
 
@@ -482,19 +478,6 @@ export default function Organizations() {
                         <FormLabel>UDYAM Number</FormLabel>
                         <FormControl>
                           <Input {...field} data-testid="input-edit-udyam" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="fssaiNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>FSSAI Number</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-edit-fssai" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

@@ -33,7 +33,6 @@ const complianceFields = {
   }),
   cinNumber: z.string().nullable().optional().transform(v => v?.trim() || null),
   udyamNumber: z.string().nullable().optional().transform(v => v?.trim() || null),
-  fssaiNumber: z.string().nullable().optional().transform(v => v?.trim() || null),
 };
 
 const createOrgWithAdminSchema = z.object({
