@@ -37,6 +37,7 @@ const complianceFields = {
 
 const createOrgWithAdminSchema = z.object({
   name: z.string().min(2),
+  code: z.string().min(2).max(10).regex(/^[A-Z0-9]+$/, "Code must be uppercase letters and numbers only"),
   industry: z.string().min(1),
   address: z.string().nullable().optional().transform(v => v || null),
   phone: z.string().nullable().optional().transform(v => v || null),
@@ -340,6 +341,11 @@ export async function registerRoutes(
       }
       
       const { admin, ...orgData } = parseResult.data;
+      
+      const existingOrg = await storage.getOrganizationByCode(orgData.code);
+      if (existingOrg) {
+        return res.status(400).json({ message: "An organization with this code already exists" });
+      }
       
       const existingUser = await storage.getAppUserByEmail(admin.email);
       if (existingUser) {
