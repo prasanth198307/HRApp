@@ -552,12 +552,14 @@ export async function registerRoutes(
         errors: []
       };
 
+      const createdEmployees: Array<{ row: number; employeeCode: string; email: string }> = [];
+
       for (let i = 0; i < employeeData.length; i++) {
         const row = employeeData[i];
         try {
-          // Validate required fields
-          if (!row.employeeCode || !row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
-            results.errors.push({ row: i + 1, message: "Missing required fields (employeeCode, firstName, lastName, email, dateOfJoining)" });
+          // Validate required fields (employeeCode no longer required - auto-generated)
+          if (!row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
+            results.errors.push({ row: i + 1, message: "Missing required fields (firstName, lastName, email, dateOfJoining)" });
             continue;
           }
 
@@ -568,15 +570,11 @@ export async function registerRoutes(
             continue;
           }
 
-          // Check for duplicate employee code
-          const existingByCode = await storage.getEmployeeByCode(organizationId, row.employeeCode);
-          if (existingByCode) {
-            results.errors.push({ row: i + 1, message: `Employee with code ${row.employeeCode} already exists` });
-            continue;
-          }
+          // Auto-generate employee code
+          const employeeCode = await storage.generateEmployeeCode(organizationId);
 
           const emp = await storage.createEmployee({
-            employeeCode: row.employeeCode,
+            employeeCode,
             firstName: row.firstName,
             lastName: row.lastName,
             email: row.email,
@@ -587,7 +585,7 @@ export async function registerRoutes(
             salary: row.salary ? parseInt(row.salary) : null,
             address: row.address || null,
             emergencyContact: row.emergencyContact || null,
-            organizationId: organizationId,
+            organizationId,
           });
 
           // Create initial employment period
@@ -597,13 +595,14 @@ export async function registerRoutes(
             startDate: emp.dateOfJoining,
           });
 
+          createdEmployees.push({ row: i + 1, employeeCode: emp.employeeCode, email: emp.email });
           results.success++;
         } catch (err: any) {
           results.errors.push({ row: i + 1, message: err.message });
         }
       }
 
-      res.json(results);
+      res.json({ ...results, createdEmployees });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -871,9 +870,13 @@ export async function registerRoutes(
 
   app.post("/api/employees", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
+      const organizationId = req.appUser!.organizationId!;
+      const employeeCode = await storage.generateEmployeeCode(organizationId);
+      
       const emp = await storage.createEmployee({
         ...req.body,
-        organizationId: req.appUser!.organizationId!,
+        employeeCode,
+        organizationId,
       });
 
       // Create initial employment period
@@ -893,41 +896,40 @@ export async function registerRoutes(
   app.post("/api/employees/bulk", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
       const { employees: employeeData } = req.body;
+      const organizationId = req.appUser!.organizationId!;
       
       if (!Array.isArray(employeeData) || employeeData.length === 0) {
         return res.status(400).json({ message: "No employee data provided" });
       }
 
-      const results: { success: number; errors: Array<{ row: number; message: string }> } = {
+      const results: { success: number; errors: Array<{ row: number; message: string; employeeCode?: string }> } = {
         success: 0,
         errors: []
       };
 
+      const createdEmployees: Array<{ row: number; employeeCode: string; email: string }> = [];
+
       for (let i = 0; i < employeeData.length; i++) {
         const row = employeeData[i];
         try {
-          // Validate required fields
-          if (!row.employeeCode || !row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
-            results.errors.push({ row: i + 1, message: "Missing required fields (employeeCode, firstName, lastName, email, dateOfJoining)" });
+          // Validate required fields (employeeCode no longer required - auto-generated)
+          if (!row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
+            results.errors.push({ row: i + 1, message: "Missing required fields (firstName, lastName, email, dateOfJoining)" });
             continue;
           }
 
           // Check for duplicate email
-          const existingByEmail = await storage.getEmployeeByEmail(req.appUser!.organizationId!, row.email);
+          const existingByEmail = await storage.getEmployeeByEmail(organizationId, row.email);
           if (existingByEmail) {
             results.errors.push({ row: i + 1, message: `Employee with email ${row.email} already exists` });
             continue;
           }
 
-          // Check for duplicate employee code
-          const existingByCode = await storage.getEmployeeByCode(req.appUser!.organizationId!, row.employeeCode);
-          if (existingByCode) {
-            results.errors.push({ row: i + 1, message: `Employee with code ${row.employeeCode} already exists` });
-            continue;
-          }
+          // Auto-generate employee code
+          const employeeCode = await storage.generateEmployeeCode(organizationId);
 
           const emp = await storage.createEmployee({
-            employeeCode: row.employeeCode,
+            employeeCode,
             firstName: row.firstName,
             lastName: row.lastName,
             email: row.email,
@@ -938,7 +940,7 @@ export async function registerRoutes(
             salary: row.salary ? parseInt(row.salary) : null,
             address: row.address || null,
             emergencyContact: row.emergencyContact || null,
-            organizationId: req.appUser!.organizationId!,
+            organizationId,
           });
 
           // Create initial employment period
@@ -948,13 +950,14 @@ export async function registerRoutes(
             startDate: emp.dateOfJoining,
           });
 
+          createdEmployees.push({ row: i + 1, employeeCode: emp.employeeCode, email: emp.email });
           results.success++;
         } catch (err: any) {
           results.errors.push({ row: i + 1, message: err.message });
         }
       }
 
-      res.json(results);
+      res.json({ ...results, createdEmployees });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

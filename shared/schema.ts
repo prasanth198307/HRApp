@@ -30,6 +30,7 @@ export const compOffSourceEnum = pgEnum("comp_off_source", ["overtime", "holiday
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  code: text("code"),
   legalName: text("legal_name"),
   industry: industryEnum("industry").notNull().default("other"),
   address: text("address"),

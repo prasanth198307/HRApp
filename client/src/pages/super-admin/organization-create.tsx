@@ -29,6 +29,7 @@ import { Link, useLocation } from "wouter";
 
 const createOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
+  code: z.string().min(2, "Code must be at least 2 characters").max(10, "Code must be at most 10 characters").regex(/^[A-Z0-9]+$/, "Code must be uppercase letters and numbers only"),
   legalName: z.string().optional(),
   industry: z.string().min(1, "Please select an industry"),
   address: z.string().optional(),
@@ -56,6 +57,7 @@ export default function OrganizationCreate() {
     resolver: zodResolver(createOrgSchema),
     defaultValues: {
       name: "",
+      code: "",
       legalName: "",
       industry: "",
       address: "",
@@ -91,6 +93,7 @@ export default function OrganizationCreate() {
   const onSubmit = (values: CreateOrgFormValues) => {
     const data = {
       name: values.name,
+      code: values.code,
       legalName: values.legalName || null,
       industry: values.industry,
       address: values.address || null,
@@ -144,6 +147,25 @@ export default function OrganizationCreate() {
                         <Input placeholder="Enter organization name" {...field} data-testid="input-org-name" />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization Code *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="e.g., ACME" 
+                          {...field} 
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                          data-testid="input-org-code" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      <p className="text-xs text-muted-foreground">Used to auto-generate employee codes (e.g., ACME0001)</p>
                     </FormItem>
                   )}
                 />

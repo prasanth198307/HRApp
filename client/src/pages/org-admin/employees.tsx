@@ -48,7 +48,6 @@ import { employmentStatusOptions } from "@shared/schema";
 import { format } from "date-fns";
 
 const employeeFormSchema = z.object({
-  employeeCode: z.string().min(1, "Employee code required"),
   firstName: z.string().min(1, "First name required"),
   lastName: z.string().min(1, "Last name required"),
   email: z.string().email("Invalid email"),
@@ -93,7 +92,6 @@ export default function Employees() {
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues: {
-      employeeCode: "",
       firstName: "",
       lastName: "",
       email: "",
@@ -219,9 +217,8 @@ export default function Employees() {
   };
 
   const onSubmit = (values: EmployeeFormValues) => {
-    const data: InsertEmployee = {
+    const data = {
       ...values,
-      organizationId: "",
       phone: values.phone || null,
       department: values.department || null,
       designation: values.designation || null,
@@ -231,9 +228,9 @@ export default function Employees() {
     };
 
     if (editingEmployee) {
-      updateMutation.mutate({ id: editingEmployee.id, data });
+      updateMutation.mutate({ id: editingEmployee.id, data: data as Partial<InsertEmployee> });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(data as InsertEmployee);
     }
   };
 
@@ -246,7 +243,6 @@ export default function Employees() {
   const openEditDialog = (emp: Employee) => {
     setEditingEmployee(emp);
     form.reset({
-      employeeCode: emp.employeeCode,
       firstName: emp.firstName,
       lastName: emp.lastName,
       email: emp.email,
@@ -354,34 +350,19 @@ export default function Employees() {
               </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="employeeCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Employee Code *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="EMP001" {...field} data-testid="input-emp-code" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="dateOfJoining"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date of Joining *</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} data-testid="input-emp-doj" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="dateOfJoining"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date of Joining *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-emp-doj" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -661,37 +642,25 @@ export default function Employees() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
+            {editingEmployee && (
+              <p className="text-sm text-muted-foreground">Employee Code: {editingEmployee.employeeCode}</p>
+            )}
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="employeeCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Employee Code *</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="dateOfJoining"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Date of Joining *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="dateOfJoining"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of Joining *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}

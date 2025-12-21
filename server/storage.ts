@@ -74,6 +74,8 @@ export interface IStorage {
   getEmployee(id: string): Promise<Employee | undefined>;
   getEmployeeByEmail(organizationId: string, email: string): Promise<Employee | undefined>;
   getEmployeeByCode(organizationId: string, employeeCode: string): Promise<Employee | undefined>;
+  getNextEmployeeNumber(organizationId: string): Promise<number>;
+  generateEmployeeCode(organizationId: string): Promise<string>;
   createEmployee(emp: InsertEmployee): Promise<Employee>;
   updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined>;
   
@@ -280,6 +282,24 @@ export class DatabaseStorage implements IStorage {
       and(eq(employees.organizationId, organizationId), eq(employees.employeeCode, employeeCode))
     );
     return emp;
+  }
+
+  async getNextEmployeeNumber(organizationId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)::int` })
+      .from(employees)
+      .where(eq(employees.organizationId, organizationId));
+    return (result[0]?.count || 0) + 1;
+  }
+
+  async generateEmployeeCode(organizationId: string): Promise<string> {
+    const org = await this.getOrganization(organizationId);
+    if (!org) {
+      throw new Error("Organization not found");
+    }
+    const orgCode = org.code || org.name.substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const nextNumber = await this.getNextEmployeeNumber(organizationId);
+    const paddedNumber = String(nextNumber).padStart(4, '0');
+    return `${orgCode}${paddedNumber}`;
   }
 
   async createEmployee(emp: InsertEmployee): Promise<Employee> {
