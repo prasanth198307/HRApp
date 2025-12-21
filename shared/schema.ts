@@ -16,6 +16,10 @@ export const attendanceStatusEnum = pgEnum("attendance_status", ["present", "abs
 export const employmentStatusEnum = pgEnum("employment_status", ["active", "exited", "on_notice"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
 export const leaveTypeEnum = pgEnum("leave_type", ["annual", "sick", "personal", "maternity", "paternity", "unpaid", "other"]);
+export const leavePolicyCodeEnum = pgEnum("leave_policy_code", ["CL", "PL", "SL", "COMP_OFF"]);
+export const accrualMethodEnum = pgEnum("accrual_method", ["monthly", "yearly", "none"]);
+export const carryForwardTypeEnum = pgEnum("carry_forward_type", ["none", "limited", "unlimited"]);
+export const leaveTransactionTypeEnum = pgEnum("leave_transaction_type", ["accrual", "request", "adjustment", "carry_forward", "lapse"]);
 export const notificationTypeEnum = pgEnum("notification_type", ["leave_request", "leave_approved", "leave_rejected", "onboarding_task", "task_completed", "general", "password_reset_request"]);
 export const onboardingTaskStatusEnum = pgEnum("onboarding_task_status", ["pending", "in_progress", "completed"]);
 
@@ -135,9 +139,11 @@ export const leaveRequests = pgTable("leave_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull().references(() => employees.id),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  policyId: varchar("policy_id").references(() => leavePolicies.id), // Reference to leave policy
   leaveType: leaveTypeEnum("leave_type").notNull(),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
+  totalDays: integer("total_days").notNull().default(1), // Number of leave days requested
   reason: text("reason"),
   status: leaveStatusEnum("status").notNull().default("pending"),
   reviewedBy: varchar("reviewed_by").references(() => appUsers.id),
@@ -168,6 +174,56 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, completed, dismissed
   completedBy: varchar("completed_by").references(() => appUsers.id),
   completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Leave Policies table (organization-specific leave configuration)
+export const leavePolicies = pgTable("leave_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  code: leavePolicyCodeEnum("code").notNull(), // CL, PL, SL, COMP_OFF
+  displayName: text("display_name").notNull(), // Casual Leave, Privilege Leave, etc.
+  annualQuota: integer("annual_quota").notNull().default(0), // Total leaves per year
+  accrualMethod: accrualMethodEnum("accrual_method").notNull().default("yearly"), // How leaves are credited
+  monthlyAccrualRate: integer("monthly_accrual_rate").default(0), // If monthly accrual, how many per month
+  carryForwardType: carryForwardTypeEnum("carry_forward_type").notNull().default("none"),
+  carryForwardLimit: integer("carry_forward_limit").default(0), // Max leaves that can be carried forward
+  allowNegativeBalance: boolean("allow_negative_balance").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  effectiveFrom: date("effective_from"),
+  effectiveTo: date("effective_to"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Employee Leave Balances table
+export const employeeLeaveBalances = pgTable("employee_leave_balances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  policyId: varchar("policy_id").notNull().references(() => leavePolicies.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  year: integer("year").notNull(), // Financial year
+  openingBalance: integer("opening_balance").notNull().default(0), // Balance at start of year (carry forward)
+  accrued: integer("accrued").notNull().default(0), // Total accrued during the year
+  used: integer("used").notNull().default(0), // Total used during the year
+  adjustment: integer("adjustment").notNull().default(0), // Manual adjustments (+/-)
+  currentBalance: integer("current_balance").notNull().default(0), // Computed: opening + accrued - used + adjustment
+  lastAccruedAt: timestamp("last_accrued_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Leave Transactions table (audit trail)
+export const leaveTransactions = pgTable("leave_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  balanceId: varchar("balance_id").notNull().references(() => employeeLeaveBalances.id),
+  policyId: varchar("policy_id").notNull().references(() => leavePolicies.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  transactionType: leaveTransactionTypeEnum("transaction_type").notNull(),
+  amount: integer("amount").notNull(), // Positive for credit, negative for debit
+  balanceAfter: integer("balance_after").notNull(), // Balance after this transaction
+  referenceId: varchar("reference_id"), // e.g., leave request ID
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => appUsers.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -338,6 +394,21 @@ export const insertPasswordResetRequestSchema = createInsertSchema(passwordReset
   completedAt: true,
 });
 
+export const insertLeavePolicySchema = createInsertSchema(leavePolicies).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmployeeLeaveBalanceSchema = createInsertSchema(employeeLeaveBalances).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertLeaveTransactionSchema = createInsertSchema(leaveTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
@@ -371,6 +442,15 @@ export type Notification = typeof notifications.$inferSelect;
 
 export type InsertPasswordResetRequest = z.infer<typeof insertPasswordResetRequestSchema>;
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
+
+export type InsertLeavePolicy = z.infer<typeof insertLeavePolicySchema>;
+export type LeavePolicy = typeof leavePolicies.$inferSelect;
+
+export type InsertEmployeeLeaveBalance = z.infer<typeof insertEmployeeLeaveBalanceSchema>;
+export type EmployeeLeaveBalance = typeof employeeLeaveBalances.$inferSelect;
+
+export type InsertLeaveTransaction = z.infer<typeof insertLeaveTransactionSchema>;
+export type LeaveTransaction = typeof leaveTransactions.$inferSelect;
 
 // Industry options for frontend
 export const industryOptions = [
@@ -420,4 +500,23 @@ export const onboardingTaskStatusOptions = [
   { value: "pending", label: "Pending", color: "gray" },
   { value: "in_progress", label: "In Progress", color: "blue" },
   { value: "completed", label: "Completed", color: "green" },
+] as const;
+
+export const leavePolicyCodeOptions = [
+  { value: "CL", label: "Casual Leave", color: "blue" },
+  { value: "PL", label: "Privilege Leave", color: "green" },
+  { value: "SL", label: "Sick Leave", color: "orange" },
+  { value: "COMP_OFF", label: "Compensatory Off", color: "purple" },
+] as const;
+
+export const accrualMethodOptions = [
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly (Full credit at start)" },
+  { value: "none", label: "No Accrual (Manual only)" },
+] as const;
+
+export const carryForwardTypeOptions = [
+  { value: "none", label: "No Carry Forward" },
+  { value: "limited", label: "Limited (with max limit)" },
+  { value: "unlimited", label: "Unlimited Carry Forward" },
 ] as const;
