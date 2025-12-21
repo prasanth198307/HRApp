@@ -16,6 +16,7 @@ import {
   Heart,
   Building2,
   KeyRound,
+  Clock,
 } from "lucide-react";
 import {
   Sidebar,
@@ -64,6 +65,7 @@ const orgAdminNavItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Employees", url: "/employees", icon: Users },
   { title: "Attendance", url: "/attendance", icon: Calendar },
+  { title: "Comp Off", url: "/comp-off", icon: Clock },
   { title: "Payslips", url: "/payslips", icon: FileText },
   { title: "Leave Policies", url: "/leave-policies", icon: CalendarCheck },
   { title: "Leave Requests", url: "/leave-requests", icon: CalendarX },

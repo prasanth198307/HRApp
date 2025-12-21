@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarPlus, CalendarCheck, CalendarX } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -48,13 +49,34 @@ import { format, differenceInDays, parseISO } from "date-fns";
 const leaveRequestSchema = z.object({
   policyId: z.string().min(1, "Select a leave type"),
   startDate: z.string().min(1, "Start date required"),
-  endDate: z.string().min(1, "End date required"),
+  endDate: z.string().optional(),
   reason: z.string().min(3, "Please provide a reason"),
+  isHalfDay: z.boolean().default(false),
+  halfDaySession: z.enum(["AM", "PM"]).optional(),
 }).refine((data) => {
-  return new Date(data.endDate) >= new Date(data.startDate);
+  if (!data.isHalfDay && (!data.endDate || data.endDate === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "End date required",
+  path: ["endDate"],
+}).refine((data) => {
+  if (!data.isHalfDay && data.endDate) {
+    return new Date(data.endDate) >= new Date(data.startDate);
+  }
+  return true;
 }, {
   message: "End date must be after start date",
   path: ["endDate"],
+}).refine((data) => {
+  if (data.isHalfDay && !data.halfDaySession) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Select morning or afternoon for half-day leave",
+  path: ["halfDaySession"],
 });
 
 type LeaveRequestFormValues = z.infer<typeof leaveRequestSchema>;
@@ -83,16 +105,28 @@ export default function MyLeavesPage() {
       startDate: "",
       endDate: "",
       reason: "",
+      isHalfDay: false,
+      halfDaySession: undefined,
     },
   });
+
+  const isHalfDay = form.watch("isHalfDay");
 
   const submitMutation = useMutation({
     mutationFn: (data: LeaveRequestFormValues) => {
       const policy = policies?.find(p => p.id === data.policyId);
+      const endDate = data.isHalfDay ? data.startDate : (data.endDate || data.startDate);
+      const baseDays = differenceInDays(parseISO(endDate), parseISO(data.startDate)) + 1;
+      const totalDays = data.isHalfDay ? 0.5 : baseDays;
       return apiRequest("POST", "/api/employee/leave-requests", {
-        ...data,
+        policyId: data.policyId,
+        startDate: data.startDate,
+        endDate: endDate,
+        reason: data.reason,
         leaveType: policy?.code || "CL",
-        totalDays: differenceInDays(parseISO(data.endDate), parseISO(data.startDate)) + 1,
+        totalDays: String(totalDays),
+        isHalfDay: data.isHalfDay,
+        halfDaySession: data.isHalfDay ? data.halfDaySession : null,
       });
     },
     onSuccess: () => {
@@ -198,13 +232,55 @@ export default function MyLeavesPage() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="isHalfDay"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-half-day"
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Half Day Leave</FormLabel>
+                        <p className="text-xs text-muted-foreground">Request only half a day off</p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                {isHalfDay && (
+                  <FormField
+                    control={form.control}
+                    name="halfDaySession"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Session</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-session">
+                              <SelectValue placeholder="Select session" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="AM">Morning (AM)</SelectItem>
+                            <SelectItem value="PM">Afternoon (PM)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="startDate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>From Date</FormLabel>
+                        <FormLabel>{isHalfDay ? "Date" : "From Date"}</FormLabel>
                         <FormControl>
                           <Input type="date" {...field} data-testid="input-start-date" />
                         </FormControl>
@@ -212,19 +288,21 @@ export default function MyLeavesPage() {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="endDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>To Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} data-testid="input-end-date" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {!isHalfDay && (
+                    <FormField
+                      control={form.control}
+                      name="endDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>To Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-end-date" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
                 <FormField
                   control={form.control}

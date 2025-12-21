@@ -30,6 +30,7 @@ import LeavePoliciesPage from "@/pages/org-admin/leave-policies";
 import LeaveRequestsPage from "@/pages/org-admin/leave-requests";
 import ReportsPage from "@/pages/org-admin/reports";
 import UserAccountsPage from "@/pages/org-admin/user-accounts";
+import CompOffPage from "@/pages/org-admin/comp-off";
 
 import EmployeeDashboard from "@/pages/employee/dashboard";
 import MyAttendance from "@/pages/employee/my-attendance";
@@ -56,6 +57,7 @@ function OrgAdminRouter() {
       <Route path="/" component={OrgAdminDashboard} />
       <Route path="/employees" component={Employees} />
       <Route path="/attendance" component={AttendancePage} />
+      <Route path="/comp-off" component={CompOffPage} />
       <Route path="/payslips" component={PayslipsPage} />
       <Route path="/holidays" component={HolidaysPage} />
       <Route path="/leave-policies" component={LeavePoliciesPage} />
