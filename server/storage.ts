@@ -4,6 +4,7 @@ import {
   organizations,
   appUsers,
   employees,
+  employmentPeriods,
   attendance,
   payslips,
   holidays,
@@ -17,6 +18,8 @@ import {
   type AppUser,
   type InsertEmployee,
   type Employee,
+  type InsertEmploymentPeriod,
+  type EmploymentPeriod,
   type InsertAttendance,
   type Attendance,
   type InsertPayslip,
@@ -57,6 +60,11 @@ export interface IStorage {
   getEmployeeByEmail(organizationId: string, email: string): Promise<Employee | undefined>;
   createEmployee(emp: InsertEmployee): Promise<Employee>;
   updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined>;
+  
+  // Employment Periods (history)
+  getEmploymentHistory(employeeId: string): Promise<EmploymentPeriod[]>;
+  createEmploymentPeriod(period: InsertEmploymentPeriod): Promise<EmploymentPeriod>;
+  closeEmploymentPeriod(employeeId: string, endDate: string, exitReason: string): Promise<void>;
   
   // Attendance
   getAttendanceByOrg(organizationId: string, month: string): Promise<Attendance[]>;
@@ -226,6 +234,29 @@ export class DatabaseStorage implements IStorage {
   async updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined> {
     const [updated] = await db.update(employees).set(data).where(eq(employees.id, id)).returning();
     return updated;
+  }
+
+  // Employment Periods (history)
+  async getEmploymentHistory(employeeId: string): Promise<EmploymentPeriod[]> {
+    return db.select().from(employmentPeriods)
+      .where(eq(employmentPeriods.employeeId, employeeId))
+      .orderBy(desc(employmentPeriods.startDate));
+  }
+
+  async createEmploymentPeriod(period: InsertEmploymentPeriod): Promise<EmploymentPeriod> {
+    const [created] = await db.insert(employmentPeriods).values(period).returning();
+    return created;
+  }
+
+  async closeEmploymentPeriod(employeeId: string, endDate: string, exitReason: string): Promise<void> {
+    await db.update(employmentPeriods)
+      .set({ endDate, exitReason })
+      .where(
+        and(
+          eq(employmentPeriods.employeeId, employeeId),
+          sql`${employmentPeriods.endDate} IS NULL`
+        )
+      );
   }
 
   // Attendance
