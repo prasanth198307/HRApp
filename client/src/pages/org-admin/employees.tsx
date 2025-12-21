@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye, History } from "lucide-react";
+import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye, History, Upload, Download } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -75,6 +75,8 @@ export default function Employees() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [exitingEmployee, setExitingEmployee] = useState<Employee | null>(null);
+  const [bulkUploadDialogOpen, setBulkUploadDialogOpen] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{ success: number; errors: Array<{ row: number; message: string }> } | null>(null);
   const { toast } = useToast();
 
   const { data: employees, isLoading } = useQuery<Employee[]>({
@@ -171,6 +173,64 @@ export default function Employees() {
     },
   });
 
+  const bulkUploadMutation = useMutation({
+    mutationFn: async (employees: Record<string, string>[]) => {
+      const res = await apiRequest("POST", "/api/employees/bulk", { employees });
+      return res.json() as Promise<{ success: number; errors: Array<{ row: number; message: string }> }>;
+    },
+    onSuccess: (data: { success: number; errors: Array<{ row: number; message: string }> }) => {
+      setUploadResults(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/stats"] });
+      if (data.success > 0) {
+        toast({ title: `Successfully uploaded ${data.success} employee(s)` });
+      }
+      if (data.errors.length > 0) {
+        toast({ title: `${data.errors.length} row(s) had errors`, variant: "destructive" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to upload employees", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim());
+    const rows: Record<string, string>[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      const row: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        row[header] = values[idx] || '';
+      });
+      rows.push(row);
+    }
+    
+    return rows;
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const employees = parseCSV(text);
+      if (employees.length === 0) {
+        toast({ title: "No valid data found in file", variant: "destructive" });
+        return;
+      }
+      setUploadResults(null);
+      bulkUploadMutation.mutate(employees);
+    };
+    reader.readAsText(file);
+  };
+
   const onSubmit = (values: EmployeeFormValues) => {
     const data: InsertEmployee = {
       ...values,
@@ -234,17 +294,77 @@ export default function Employees() {
             Manage your organization's employees
           </p>
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-employee">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Employee
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Add New Employee</DialogTitle>
-            </DialogHeader>
+        <div className="flex flex-wrap gap-2">
+          <Dialog open={bulkUploadDialogOpen} onOpenChange={(open) => { setBulkUploadDialogOpen(open); if (!open) setUploadResults(null); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-bulk-upload">
+                <Upload className="mr-2 h-4 w-4" />
+                Bulk Upload
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Bulk Upload Employees</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Upload a CSV file with employee data. Download the template below to see the required format.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <a href="/employee_template.csv" download="employee_template.csv">
+                    <Button variant="outline" size="sm" data-testid="button-download-template">
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Template
+                    </Button>
+                  </a>
+                </div>
+                <div className="border rounded-md p-4">
+                  <Input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    disabled={bulkUploadMutation.isPending}
+                    data-testid="input-csv-file"
+                  />
+                </div>
+                {bulkUploadMutation.isPending && (
+                  <p className="text-sm text-muted-foreground">Uploading employees...</p>
+                )}
+                {uploadResults && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">
+                      Results: {uploadResults.success} successful, {uploadResults.errors.length} failed
+                    </p>
+                    {uploadResults.errors.length > 0 && (
+                      <div className="max-h-40 overflow-y-auto border rounded-md p-2">
+                        {uploadResults.errors.map((error, idx) => (
+                          <p key={idx} className="text-sm text-destructive">
+                            Row {error.row}: {error.message}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setBulkUploadDialogOpen(false)}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-employee">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Employee
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Add New Employee</DialogTitle>
+              </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -410,6 +530,7 @@ export default function Employees() {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
