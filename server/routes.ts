@@ -676,6 +676,18 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Employee not found" });
       }
 
+      if (existing.status === "exited") {
+        return res.status(400).json({ message: "Employee is already exited" });
+      }
+
+      // Close the current employment period in history
+      await storage.closeEmploymentPeriod(
+        req.params.id,
+        req.body.dateOfExit,
+        req.body.exitReason
+      );
+
+      // Update employee status (but keep historical data - dateOfExit and exitReason on employee record)
       const emp = await storage.updateEmployee(req.params.id, {
         dateOfExit: req.body.dateOfExit,
         exitReason: req.body.exitReason,
@@ -687,7 +699,22 @@ export async function registerRoutes(
     }
   });
 
-  // Rejoin an exited employee
+  // Get employment history for an employee
+  app.get("/api/employees/:id/history", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const existing = await storage.getEmployee(req.params.id);
+      if (!existing || existing.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      const history = await storage.getEmploymentHistory(req.params.id);
+      res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Rejoin an exited employee (preserves exit history)
   app.post("/api/employees/:id/rejoin", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
       const existing = await storage.getEmployee(req.params.id);
@@ -699,11 +726,22 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Only exited employees can rejoin" });
       }
 
+      const newJoinDate = req.body.rejoinDate || new Date().toISOString().split("T")[0];
+      const rejoinNotes = req.body.rejoinNotes || null;
+
+      // Create a new employment period (the old one was already closed on exit)
+      await storage.createEmploymentPeriod({
+        employeeId: req.params.id,
+        organizationId: existing.organizationId,
+        startDate: newJoinDate,
+        rejoinNotes,
+      });
+
+      // Update employee status - keep previous exit info intact on record
       const emp = await storage.updateEmployee(req.params.id, {
         status: "active",
-        dateOfExit: null,
-        exitReason: null,
-        dateOfJoining: new Date().toISOString().split("T")[0], // New join date
+        dateOfJoining: newJoinDate, // New current join date
+        // Don't clear dateOfExit/exitReason - they're historical data
       });
       res.json(emp);
     } catch (error: any) {
