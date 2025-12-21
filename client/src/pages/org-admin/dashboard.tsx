@@ -1,10 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserCheck, UserX, CalendarDays, FileText, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, UserCheck, UserX, CalendarDays, FileText, Clock, KeyRound, X } from "lucide-react";
 import { useUserContext } from "@/lib/user-context";
-import type { Employee, Holiday } from "@shared/schema";
+import type { Employee, Holiday, PasswordResetRequest } from "@shared/schema";
 import { format } from "date-fns";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface OrgStats {
   totalEmployees: number;
@@ -17,6 +20,7 @@ interface OrgStats {
 
 export default function OrgAdminDashboard() {
   const { organization } = useUserContext();
+  const { toast } = useToast();
 
   const { data: stats, isLoading: statsLoading } = useQuery<OrgStats>({
     queryKey: ["/api/org/stats"],
@@ -28,6 +32,20 @@ export default function OrgAdminDashboard() {
 
   const { data: upcomingHolidays } = useQuery<Holiday[]>({
     queryKey: ["/api/holidays/upcoming"],
+  });
+
+  const { data: resetRequests } = useQuery<PasswordResetRequest[]>({
+    queryKey: ["/api/org/password-reset-requests"],
+  });
+
+  const dismissRequestMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("POST", `/api/password-reset-requests/${id}/dismiss`);
+    },
+    onSuccess: () => {
+      toast({ title: "Request dismissed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/password-reset-requests"] });
+    },
   });
 
   const statCards = [
@@ -273,6 +291,50 @@ export default function OrgAdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {resetRequests && resetRequests.length > 0 && (
+        <Card className="border-orange-200 dark:border-orange-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-orange-500" />
+              Password Reset Requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {resetRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between gap-4 rounded-md border p-3"
+                  data-testid={`reset-request-${request.id}`}
+                >
+                  <div>
+                    <p className="font-medium">{request.email}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Requested {request.createdAt ? format(new Date(request.createdAt), "MMM d, yyyy 'at' h:mm a") : "recently"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => dismissRequestMutation.mutate(request.id)}
+                      disabled={dismissRequestMutation.isPending}
+                      data-testid={`button-dismiss-${request.id}`}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground mt-4">
+              Go to User Accounts to reset employee passwords.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

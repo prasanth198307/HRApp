@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -20,6 +22,39 @@ export default function LoginPage() {
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerFirstName, setRegisterFirstName] = useState("");
   const [registerLastName, setRegisterLastName] = useState("");
+  
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+
+  const forgotPasswordMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await fetch("/api/password-reset-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to submit request");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Request Submitted",
+        description: data.message,
+      });
+      setForgotPasswordOpen(false);
+      setForgotEmail("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   if (isAuthenticated) {
     setLocation("/");
@@ -140,6 +175,17 @@ export default function LoginPage() {
                       <>Sign In <ArrowRight className="ml-2 h-4 w-4" /></>
                     )}
                   </Button>
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="text-sm text-muted-foreground"
+                      onClick={() => setForgotPasswordOpen(true)}
+                      data-testid="button-forgot-password"
+                    >
+                      Forgot your password?
+                    </Button>
+                  </div>
                 </form>
               </TabsContent>
               <TabsContent value="register">
@@ -224,6 +270,52 @@ export default function LoginPage() {
             </CardContent>
           </Tabs>
         </Card>
+
+        <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>Forgot Password?</DialogTitle>
+              <DialogDescription>
+                Enter your email address and we'll notify your administrator to reset your password.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (forgotEmail) {
+                  forgotPasswordMutation.mutate(forgotEmail);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">Email</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                  data-testid="input-forgot-email"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setForgotPasswordOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={forgotPasswordMutation.isPending || !forgotEmail}
+                  className="bg-gradient-to-r from-rose-500 to-pink-600"
+                  data-testid="button-submit-forgot"
+                >
+                  {forgotPasswordMutation.isPending ? "Submitting..." : "Request Reset"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
