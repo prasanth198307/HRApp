@@ -43,6 +43,12 @@ import {
   type EmployeeLeaveBalance,
   type InsertLeaveTransaction,
   type LeaveTransaction,
+  type InsertTimeEntry,
+  type TimeEntry,
+  type InsertCompOffGrant,
+  type CompOffGrant,
+  timeEntries,
+  compOffGrants,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -145,6 +151,19 @@ export interface IStorage {
   getLeaveTransactions(balanceId: string): Promise<LeaveTransaction[]>;
   getLeaveTransactionsByEmployee(employeeId: string, year?: number): Promise<LeaveTransaction[]>;
   createLeaveTransaction(transaction: InsertLeaveTransaction): Promise<LeaveTransaction>;
+
+  // Time Entries
+  getTimeEntriesByEmployee(employeeId: string, date?: string): Promise<TimeEntry[]>;
+  getTimeEntriesByOrg(organizationId: string, date: string): Promise<TimeEntry[]>;
+  createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry>;
+  getTodayTimeEntries(employeeId: string): Promise<TimeEntry[]>;
+
+  // Comp Off Grants
+  getCompOffGrantsByEmployee(employeeId: string): Promise<CompOffGrant[]>;
+  getCompOffGrantsByOrg(organizationId: string): Promise<CompOffGrant[]>;
+  getPendingCompOffGrants(organizationId: string): Promise<CompOffGrant[]>;
+  createCompOffGrant(grant: InsertCompOffGrant): Promise<CompOffGrant>;
+  applyCompOffGrant(id: string): Promise<CompOffGrant | undefined>;
 
   // Stats
   getSuperAdminStats(): Promise<{
@@ -677,11 +696,11 @@ export class DatabaseStorage implements IStorage {
           policyId: policy.id,
           organizationId,
           year,
-          openingBalance: 0,
-          accrued: initialAccrued,
-          used: 0,
-          adjustment: 0,
-          currentBalance: initialAccrued,
+          openingBalance: "0",
+          accrued: String(initialAccrued),
+          used: "0",
+          adjustment: "0",
+          currentBalance: String(initialAccrued),
         });
       }
     }
@@ -714,6 +733,80 @@ export class DatabaseStorage implements IStorage {
   async createLeaveTransaction(transaction: InsertLeaveTransaction): Promise<LeaveTransaction> {
     const [created] = await db.insert(leaveTransactions).values(transaction).returning();
     return created;
+  }
+
+  // Time Entries
+  async getTimeEntriesByEmployee(employeeId: string, date?: string): Promise<TimeEntry[]> {
+    if (date) {
+      return db.select().from(timeEntries)
+        .where(and(
+          eq(timeEntries.employeeId, employeeId),
+          eq(timeEntries.date, date)
+        ))
+        .orderBy(timeEntries.entryTime);
+    }
+    return db.select().from(timeEntries)
+      .where(eq(timeEntries.employeeId, employeeId))
+      .orderBy(desc(timeEntries.entryTime));
+  }
+
+  async getTimeEntriesByOrg(organizationId: string, date: string): Promise<TimeEntry[]> {
+    return db.select().from(timeEntries)
+      .where(and(
+        eq(timeEntries.organizationId, organizationId),
+        eq(timeEntries.date, date)
+      ))
+      .orderBy(timeEntries.entryTime);
+  }
+
+  async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
+    const [created] = await db.insert(timeEntries).values(entry).returning();
+    return created;
+  }
+
+  async getTodayTimeEntries(employeeId: string): Promise<TimeEntry[]> {
+    const today = new Date().toISOString().split('T')[0];
+    return db.select().from(timeEntries)
+      .where(and(
+        eq(timeEntries.employeeId, employeeId),
+        eq(timeEntries.date, today)
+      ))
+      .orderBy(timeEntries.entryTime);
+  }
+
+  // Comp Off Grants
+  async getCompOffGrantsByEmployee(employeeId: string): Promise<CompOffGrant[]> {
+    return db.select().from(compOffGrants)
+      .where(eq(compOffGrants.employeeId, employeeId))
+      .orderBy(desc(compOffGrants.createdAt));
+  }
+
+  async getCompOffGrantsByOrg(organizationId: string): Promise<CompOffGrant[]> {
+    return db.select().from(compOffGrants)
+      .where(eq(compOffGrants.organizationId, organizationId))
+      .orderBy(desc(compOffGrants.createdAt));
+  }
+
+  async getPendingCompOffGrants(organizationId: string): Promise<CompOffGrant[]> {
+    return db.select().from(compOffGrants)
+      .where(and(
+        eq(compOffGrants.organizationId, organizationId),
+        eq(compOffGrants.isApplied, false)
+      ))
+      .orderBy(desc(compOffGrants.createdAt));
+  }
+
+  async createCompOffGrant(grant: InsertCompOffGrant): Promise<CompOffGrant> {
+    const [created] = await db.insert(compOffGrants).values(grant).returning();
+    return created;
+  }
+
+  async applyCompOffGrant(id: string): Promise<CompOffGrant | undefined> {
+    const [updated] = await db.update(compOffGrants)
+      .set({ isApplied: true, appliedAt: new Date() })
+      .where(eq(compOffGrants.id, id))
+      .returning();
+    return updated;
   }
 }
 
