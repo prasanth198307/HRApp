@@ -246,7 +246,43 @@ Comp Off allows organizations to grant compensatory time off to employees for ov
 - `POST /api/time-entries` - Create check-in or check-out entry
 - `GET /api/time-entries?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` - Org Admin: All employee time entries
 
+## Bulk Employee Upload
+
+### Overview
+Both Org Admins and Super Admins can upload multiple employees at once via CSV file.
+
+### How to Use
+1. Click "Bulk Upload" button on the Employees page (Org Admin) or Manage Organization > Employees tab (Super Admin)
+2. Download the CSV template using "Download Template"
+3. Fill in employee data following the template format
+4. Upload the completed CSV file
+5. Review success/error results
+
+### CSV Template Fields
+- **employeeCode** (required): Unique employee identifier
+- **firstName** (required): Employee's first name
+- **lastName** (required): Employee's last name
+- **email** (required): Employee's email address
+- **dateOfJoining** (required): Date in YYYY-MM-DD format
+- **phone**: Contact phone number
+- **department**: Department name
+- **designation**: Job title
+- **salary**: Annual salary (numbers only)
+- **address**: Full address
+- **emergencyContact**: Emergency contact info
+
+### Validation
+- Required fields: employeeCode, firstName, lastName, email, dateOfJoining
+- Duplicate email/employee code checks
+- Row-level error reporting for failed entries
+- Employment periods automatically created for successful uploads
+
+### API Endpoints
+- `POST /api/employees/bulk` - Org Admin: Upload employees to their organization
+- `POST /api/super-admin/employees/bulk` - Super Admin: Upload employees to any organization
+
 ## Recent Changes
+- Added bulk employee upload feature for Org Admin and Super Admin with CSV template
 - Added time clock feature with check-in/check-out functionality on employee dashboard
 - Added My Time Entries page for employees to view their time logs with monthly filtering
 - Added Time Reports page for Org Admins to view all employee working hours
