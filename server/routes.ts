@@ -649,6 +649,14 @@ export async function registerRoutes(
         ...req.body,
         organizationId: req.appUser!.organizationId!,
       });
+
+      // Create initial employment period
+      await storage.createEmploymentPeriod({
+        employeeId: emp.id,
+        organizationId: emp.organizationId,
+        startDate: emp.dateOfJoining,
+      });
+
       res.status(201).json(emp);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

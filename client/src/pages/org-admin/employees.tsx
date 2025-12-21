@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye } from "lucide-react";
+import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye, History } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,7 +42,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import type { Employee, InsertEmployee } from "@shared/schema";
+import type { Employee, InsertEmployee, EmploymentPeriod } from "@shared/schema";
 import { employmentStatusOptions } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -79,6 +79,12 @@ export default function Employees() {
 
   const { data: employees, isLoading } = useQuery<Employee[]>({
     queryKey: ["/api/employees"],
+  });
+
+  const { data: employmentHistory } = useQuery<EmploymentPeriod[]>({
+    queryKey: ["/api/employees", viewingEmployee?.id, "history"],
+    queryFn: () => fetch(`/api/employees/${viewingEmployee?.id}/history`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!viewingEmployee,
   });
 
   const form = useForm<EmployeeFormValues>({
@@ -138,8 +144,9 @@ export default function Employees() {
   const exitMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: ExitFormValues }) =>
       apiRequest("POST", `/api/employees/${id}/exit`, data),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", id, "history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org/stats"] });
       setExitingEmployee(null);
       exitForm.reset();
@@ -153,13 +160,14 @@ export default function Employees() {
   const rejoinMutation = useMutation({
     mutationFn: (id: string) =>
       apiRequest("POST", `/api/employees/${id}/rejoin`),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", id, "history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org/stats"] });
       toast({ title: "Employee rejoined successfully" });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to record exit", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to rejoin employee", description: error.message, variant: "destructive" });
     },
   });
 
@@ -718,6 +726,48 @@ export default function Employees() {
                   </Badge>
                 </div>
               </div>
+
+              {/* Employment History */}
+              {employmentHistory && employmentHistory.length > 0 && (
+                <div className="pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <History className="h-4 w-4 text-muted-foreground" />
+                    <h4 className="font-medium">Employment History</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {employmentHistory.map((period, index) => (
+                      <div key={period.id} className="rounded-md border p-3 text-sm">
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <div className="font-medium">
+                              Period {employmentHistory.length - index}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {format(new Date(period.startDate), "MMM d, yyyy")} 
+                              {period.endDate ? ` - ${format(new Date(period.endDate), "MMM d, yyyy")}` : " - Present"}
+                            </div>
+                          </div>
+                          {period.endDate ? (
+                            <Badge variant="destructive" className="text-xs">Exited</Badge>
+                          ) : (
+                            <Badge className="text-xs">Active</Badge>
+                          )}
+                        </div>
+                        {period.exitReason && (
+                          <div className="mt-2 text-muted-foreground">
+                            <span className="font-medium">Exit Reason:</span> {period.exitReason}
+                          </div>
+                        )}
+                        {period.rejoinNotes && (
+                          <div className="mt-1 text-muted-foreground">
+                            <span className="font-medium">Rejoin Notes:</span> {period.rejoinNotes}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
