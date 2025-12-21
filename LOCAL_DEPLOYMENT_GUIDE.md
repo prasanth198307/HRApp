@@ -71,39 +71,58 @@ Open Terminal, navigate to the project folder, and run:
 npm install
 ```
 
-### Step 3: Set Up the Database
+### Step 3: Set Up the Database and User
 
-**Create a new PostgreSQL database:**
-```bash
-createdb humane_hr
-```
+Open Terminal and connect to PostgreSQL:
 
-**Or using psql:**
 ```bash
 psql postgres
+```
+
+Then run the following commands to create a dedicated user and database:
+
+```sql
+-- Create a new user for the application
+CREATE USER humane_user WITH PASSWORD 'your_secure_password';
+
+-- Create the database
 CREATE DATABASE humane_hr;
+
+-- Grant all privileges to the user
+GRANT ALL PRIVILEGES ON DATABASE humane_hr TO humane_user;
+
+-- Connect to the new database
+\c humane_hr
+
+-- Grant schema privileges (required for PostgreSQL 15+)
+GRANT ALL ON SCHEMA public TO humane_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO humane_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO humane_user;
+
+-- Exit psql
 \q
 ```
+
+**Replace** `your_secure_password` with a strong password of your choice.
 
 ### Step 4: Configure Environment Variables
 
 Create a file named `.env` in the project root folder with the following content:
 
 ```env
-DATABASE_URL=postgresql://your_username:your_password@localhost:5432/humane_hr
+DATABASE_URL=postgresql://humane_user:your_secure_password@localhost:5432/humane_hr
 SESSION_SECRET=your-secret-key-here-make-it-long-and-random
 NODE_ENV=development
 ```
 
 **Replace:**
-- `your_username` with your Mac username (or postgres username)
-- `your_password` with your PostgreSQL password (leave empty if none)
-- `your-secret-key-here-make-it-long-and-random` with a random string
+- `your_secure_password` with the password you set in Step 3
+- `your-secret-key-here-make-it-long-and-random` with a random string (at least 32 characters)
 
-**Example (if no password):**
+**Example:**
 ```env
-DATABASE_URL=postgresql://johnsmith@localhost:5432/humane_hr
-SESSION_SECRET=my-super-secret-key-12345-abcdef
+DATABASE_URL=postgresql://humane_user:MyStr0ngP@ssw0rd@localhost:5432/humane_hr
+SESSION_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
 NODE_ENV=development
 ```
 
