@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, Calendar, FileText, Shield, BarChart3, Rocket, Heart, TrendingUp } from "lucide-react";
@@ -53,13 +54,14 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Button 
-              className="bg-gradient-to-r from-rose-500 to-orange-400 border-0 text-white" 
-              data-testid="button-login"
-              onClick={() => window.location.href = "/api/login"}
-            >
-              Sign In
-            </Button>
+            <Link href="/login">
+              <Button 
+                className="bg-gradient-to-r from-rose-500 to-orange-400 border-0 text-white" 
+                data-testid="button-login"
+              >
+                Sign In
+              </Button>
+            </Link>
           </div>
         </div>
       </header>

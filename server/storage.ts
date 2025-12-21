@@ -38,8 +38,8 @@ export interface IStorage {
   updateOrganization(id: string, data: Partial<InsertOrganization>): Promise<Organization | undefined>;
   
   // App Users
-  getAppUserByAuthId(authUserId: string): Promise<AppUser | undefined>;
-  getAppUserByInviteEmail(email: string): Promise<AppUser | undefined>;
+  getAppUserByEmail(email: string): Promise<AppUser | undefined>;
+  getAppUserById(id: string): Promise<AppUser | undefined>;
   getAppUserByInviteToken(token: string): Promise<AppUser | undefined>;
   getAppUsersByOrg(organizationId: string): Promise<AppUser[]>;
   getAllAppUsers(): Promise<AppUser[]>;
@@ -142,18 +142,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // App Users
-  async getAppUserByAuthId(authUserId: string): Promise<AppUser | undefined> {
-    const [user] = await db.select().from(appUsers).where(eq(appUsers.authUserId, authUserId));
+  async getAppUserByEmail(email: string): Promise<AppUser | undefined> {
+    const [user] = await db.select().from(appUsers).where(eq(appUsers.email, email.toLowerCase()));
     return user;
   }
 
-  async getAppUserByInviteEmail(email: string): Promise<AppUser | undefined> {
-    const [user] = await db.select().from(appUsers).where(
-      and(
-        eq(appUsers.inviteEmail, email.toLowerCase()),
-        eq(appUsers.isPending, true)
-      )
-    );
+  async getAppUserById(id: string): Promise<AppUser | undefined> {
+    const [user] = await db.select().from(appUsers).where(eq(appUsers.id, id));
     return user;
   }
 

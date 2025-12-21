@@ -12,6 +12,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import Landing from "@/pages/landing";
+import LoginPage from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
 import SuperAdminDashboard from "@/pages/super-admin/dashboard";
@@ -113,7 +114,7 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
 
   if (isLoading) {
     return (
@@ -126,8 +127,13 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    return <Landing />;
+  if (!isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/login" component={LoginPage} />
+        <Route component={Landing} />
+      </Switch>
+    );
   }
 
   return (
