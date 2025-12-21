@@ -44,6 +44,7 @@ export function useAuth() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/auth/user"], data);
+      queryClient.invalidateQueries({ queryKey: ["/api/user/context"] });
     },
   });
 
@@ -54,6 +55,7 @@ export function useAuth() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/auth/user"], data);
+      queryClient.invalidateQueries({ queryKey: ["/api/user/context"] });
     },
   });
 
@@ -63,6 +65,7 @@ export function useAuth() {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/auth/user"], null);
+      queryClient.setQueryData(["/api/user/context"], null);
     },
   });
 
@@ -73,6 +76,7 @@ export function useAuth() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/auth/user"], data);
+      queryClient.invalidateQueries({ queryKey: ["/api/user/context"] });
     },
   });
 
