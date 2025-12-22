@@ -867,6 +867,28 @@ export async function registerRoutes(
           break;
         }
 
+        case "tax-declarations": {
+          const declarations = await storage.getTaxDeclarationsByOrg(organizationId);
+          headers = ["employeeCode", "employeeName", "department", "financialYear", "taxRegime", "status", "totalDeclared", "totalApproved", "submittedDate", "verifiedDate"];
+          rows = await Promise.all(declarations.map(async (dec) => {
+            const employee = await storage.getEmployee(dec.employeeId);
+            return {
+              employeeCode: employee?.employeeCode || "",
+              employeeName: employee ? `${employee.firstName} ${employee.lastName}` : "",
+              department: employee?.department || "",
+              financialYear: dec.financialYear,
+              taxRegime: dec.taxRegime === "new" ? "New Regime" : "Old Regime",
+              status: dec.status.charAt(0).toUpperCase() + dec.status.slice(1),
+              totalDeclared: dec.totalDeclared,
+              totalApproved: dec.totalApproved || "",
+              submittedDate: dec.submittedAt ? new Date(dec.submittedAt).toLocaleDateString() : "",
+              verifiedDate: dec.verifiedAt ? new Date(dec.verifiedAt).toLocaleDateString() : "",
+            };
+          }));
+          filename = `${org.name.replace(/\s+/g, "_")}_tax_declarations.csv`;
+          break;
+        }
+
         default:
           return res.status(400).json({ message: "Invalid export type" });
       }
@@ -2622,6 +2644,89 @@ export async function registerRoutes(
     }
   });
 
+  // Org Admin: Export tax declarations as CSV (must be before /:id routes)
+  app.get("/api/org/tax-declarations/export", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const year = req.query.year as string | undefined;
+      const declarations = await storage.getTaxDeclarationsByOrg(req.appUser!.organizationId!, year);
+      
+      const headers = [
+        "Employee Code", "Employee Name", "Department", "Financial Year", "Tax Regime",
+        "Status", "Total Declared (INR)", "Total Approved (INR)", "Submitted Date", "Verified Date"
+      ];
+      
+      const rows = await Promise.all(declarations.map(async (dec) => {
+        const employee = await storage.getEmployee(dec.employeeId);
+        return [
+          employee?.employeeCode || "",
+          employee ? `${employee.firstName} ${employee.lastName}` : "",
+          employee?.department || "",
+          dec.financialYear,
+          dec.taxRegime === "new" ? "New Regime" : "Old Regime",
+          dec.status.charAt(0).toUpperCase() + dec.status.slice(1),
+          dec.totalDeclared,
+          dec.totalApproved || "",
+          dec.submittedAt ? new Date(dec.submittedAt).toLocaleDateString() : "",
+          dec.verifiedAt ? new Date(dec.verifiedAt).toLocaleDateString() : ""
+        ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(",");
+      }));
+
+      const csv = [headers.join(","), ...rows].join("\n");
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="tax_declarations_${year || 'all'}.csv"`);
+      res.send(csv);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Org Admin: Export detailed tax declaration items as CSV (must be before /:id routes)
+  app.get("/api/org/tax-declarations/export-details", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const year = req.query.year as string | undefined;
+      const declarations = await storage.getTaxDeclarationsByOrg(req.appUser!.organizationId!, year);
+      
+      const headers = [
+        "Employee Code", "Employee Name", "Financial Year", "Tax Regime", "Status",
+        "Category", "Sub Type", "Description", "Provider Name", "Policy Number",
+        "Amount Declared (INR)", "Amount Approved (INR)"
+      ];
+      
+      const rows: string[] = [];
+      
+      for (const dec of declarations) {
+        const employee = await storage.getEmployee(dec.employeeId);
+        const items = await storage.getTaxDeclarationItems(dec.id);
+        
+        for (const item of items) {
+          rows.push([
+            employee?.employeeCode || "",
+            employee ? `${employee.firstName} ${employee.lastName}` : "",
+            dec.financialYear,
+            dec.taxRegime === "new" ? "New Regime" : "Old Regime",
+            dec.status.charAt(0).toUpperCase() + dec.status.slice(1),
+            item.category,
+            item.subType || "",
+            item.description || "",
+            item.providerName || "",
+            item.policyNumber || "",
+            item.amountDeclared,
+            item.amountApproved || ""
+          ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(","));
+        }
+      }
+
+      const csv = [headers.join(","), ...rows].join("\n");
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="tax_declaration_details_${year || 'all'}.csv"`);
+      res.send(csv);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Org Admin: Get specific declaration with items
   app.get("/api/org/tax-declarations/:id", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
@@ -2713,90 +2818,6 @@ export async function registerRoutes(
       });
 
       res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Org Admin: Export tax declarations as CSV
-  app.get("/api/org/tax-declarations/export", requireAuth, requireOrgAdmin, async (req, res) => {
-    try {
-      const year = req.query.year as string | undefined;
-      const declarations = await storage.getTaxDeclarationsByOrg(req.appUser!.organizationId!, year);
-      
-      // Build CSV content
-      const headers = [
-        "Employee Code", "Employee Name", "Department", "Financial Year", "Tax Regime",
-        "Status", "Total Declared (INR)", "Total Approved (INR)", "Submitted Date", "Verified Date"
-      ];
-      
-      const rows = await Promise.all(declarations.map(async (dec) => {
-        const employee = await storage.getEmployee(dec.employeeId);
-        return [
-          employee?.employeeCode || "",
-          employee ? `${employee.firstName} ${employee.lastName}` : "",
-          employee?.department || "",
-          dec.financialYear,
-          dec.taxRegime === "new" ? "New Regime" : "Old Regime",
-          dec.status.charAt(0).toUpperCase() + dec.status.slice(1),
-          dec.totalDeclared,
-          dec.totalApproved || "",
-          dec.submittedAt ? new Date(dec.submittedAt).toLocaleDateString() : "",
-          dec.verifiedAt ? new Date(dec.verifiedAt).toLocaleDateString() : ""
-        ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(",");
-      }));
-
-      const csv = [headers.join(","), ...rows].join("\n");
-      
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `attachment; filename="tax_declarations_${year || 'all'}.csv"`);
-      res.send(csv);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Org Admin: Export detailed tax declaration items as CSV
-  app.get("/api/org/tax-declarations/export-details", requireAuth, requireOrgAdmin, async (req, res) => {
-    try {
-      const year = req.query.year as string | undefined;
-      const declarations = await storage.getTaxDeclarationsByOrg(req.appUser!.organizationId!, year);
-      
-      const headers = [
-        "Employee Code", "Employee Name", "Financial Year", "Tax Regime", "Status",
-        "Category", "Sub Type", "Description", "Provider Name", "Policy Number",
-        "Amount Declared (INR)", "Amount Approved (INR)"
-      ];
-      
-      const rows: string[] = [];
-      
-      for (const dec of declarations) {
-        const employee = await storage.getEmployee(dec.employeeId);
-        const items = await storage.getTaxDeclarationItems(dec.id);
-        
-        for (const item of items) {
-          rows.push([
-            employee?.employeeCode || "",
-            employee ? `${employee.firstName} ${employee.lastName}` : "",
-            dec.financialYear,
-            dec.taxRegime === "new" ? "New Regime" : "Old Regime",
-            dec.status.charAt(0).toUpperCase() + dec.status.slice(1),
-            item.category,
-            item.subType || "",
-            item.description || "",
-            item.providerName || "",
-            item.policyNumber || "",
-            item.amountDeclared,
-            item.amountApproved || ""
-          ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(","));
-        }
-      }
-
-      const csv = [headers.join(","), ...rows].join("\n");
-      
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `attachment; filename="tax_declaration_details_${year || 'all'}.csv"`);
-      res.send(csv);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Download, FileSpreadsheet, Users, Calendar, CalendarDays, CalendarCheck, Wallet } from "lucide-react";
+import { Download, FileSpreadsheet, Users, Calendar, CalendarDays, CalendarCheck, Wallet, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Organization } from "@shared/schema";
 
@@ -15,6 +15,7 @@ const exportTypes = [
   { id: "leave-requests", label: "Leave Requests", description: "All leave requests with status and details", icon: CalendarCheck },
   { id: "holidays", label: "Holidays", description: "Organization holidays including national and custom", icon: CalendarDays },
   { id: "leave-balances", label: "Leave Balances", description: "Employee leave balances for all policies", icon: Wallet },
+  { id: "tax-declarations", label: "Tax Declarations", description: "Employee tax declarations (Form 12BB) with regime and amounts", icon: Receipt },
 ];
 
 export default function DataExportPage() {
