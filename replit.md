@@ -29,12 +29,13 @@ The application is built with a multi-tenant architecture ensuring complete data
 -   **Schema:**
     -   `organizations`: Stores multi-tenant organization details and industry classification.
     -   `app_users`: Manages user accounts, linked to authentication and organizations.
-    -   `employees`: Contains detailed employee records and lifecycle data.
+    -   `employees`: Contains detailed employee records and lifecycle data (manual employee code entry).
     -   `attendance`: Tracks daily attendance for employees.
     -   `payslips`: Stores uploaded payslip files.
     -   `holidays`: Manages both default (industry-specific) and custom organization holidays.
     -   `time_entries`: Records employee check-in/check-out times.
     -   `comp_off_grants`: Manages compensatory off grants.
+    -   `employee_documents`: Stores employee document metadata (offer letters, appointment letters, Aadhar, PAN, photos, and other documents).
 
 **Key Features & Technical Implementations:**
 -   **Employee Lifecycle Management:** Comprehensive tracking from onboarding to exit.
@@ -56,6 +57,10 @@ The application is built with a multi-tenant architecture ensuring complete data
     -   Bulk employee upload via CSV for both Org Admins and Super Admins.
 -   **Data Export:**
     -   Super Admin functionality to export various organizational data (employees, attendance, leave requests, holidays, leave balances) as CSV.
+-   **Employee Document Management:**
+    -   Upload and manage employee documents (offer letters, appointment letters, Aadhar, PAN, photos, other documents).
+    -   Secure file storage with download and delete capabilities.
+    -   File type validation (PDF, DOC, DOCX, JPG, JPEG, PNG) with 10MB size limit.
 
 ## External Dependencies
 -   **Database:** PostgreSQL
