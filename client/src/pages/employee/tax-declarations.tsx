@@ -45,16 +45,26 @@ import {
 } from "@/components/ui/form";
 import type { TaxDeclaration, TaxDeclarationItem } from "@shared/schema";
 
-const TAX_CATEGORIES = [
-  { value: "80C", label: "Section 80C", limit: 150000, description: "PPF, ELSS, Insurance Premium, etc." },
-  { value: "80CCD", label: "Section 80CCD (NPS)", limit: 50000, description: "National Pension Scheme additional" },
-  { value: "80D", label: "Section 80D (Medical)", limit: 100000, description: "Health Insurance Premium" },
-  { value: "80E", label: "Section 80E", limit: null, description: "Education Loan Interest" },
-  { value: "80G", label: "Section 80G", limit: null, description: "Donations" },
-  { value: "HRA", label: "HRA Exemption", limit: null, description: "House Rent Allowance" },
+// Old Regime - All deductions available
+const OLD_REGIME_CATEGORIES = [
+  { value: "80C", label: "Section 80C", limit: 150000, description: "PPF, ELSS, LIC, NSC, ULIP, Tuition Fees, Home Loan Principal, etc." },
+  { value: "80CCD", label: "Section 80CCD(1B) - NPS", limit: 50000, description: "Additional NPS contribution by employee" },
+  { value: "80D", label: "Section 80D (Medical)", limit: 100000, description: "Health Insurance Premium for self, family & parents" },
+  { value: "80E", label: "Section 80E", limit: null, description: "Education Loan Interest (no limit)" },
+  { value: "80G", label: "Section 80G", limit: null, description: "Donations to charitable institutions" },
+  { value: "HRA", label: "HRA Exemption", limit: null, description: "House Rent Allowance exemption" },
   { value: "LTA", label: "LTA", limit: null, description: "Leave Travel Allowance" },
-  { value: "OTHER", label: "Other Deductions", limit: null, description: "Any other tax saving investments" },
+  { value: "OTHER", label: "Other Deductions", limit: null, description: "Section 24(b) Home Loan Interest, Professional Tax, etc." },
 ] as const;
+
+// New Regime - Only limited deductions available as per Govt rules
+const NEW_REGIME_CATEGORIES = [
+  { value: "80CCD", label: "Section 80CCD(2) - Employer NPS", limit: null, description: "Employer's NPS contribution (up to 14% of salary for Govt, 10% for Pvt)" },
+  { value: "OTHER", label: "Other Allowed Exemptions", limit: null, description: "Agniveer Corpus, Transport allowances for disabled, etc." },
+] as const;
+
+// Combined for display purposes
+const TAX_CATEGORIES = OLD_REGIME_CATEGORIES;
 
 const CATEGORY_SUBTYPES: Record<string, { value: string; label: string }[]> = {
   "80C": [
@@ -117,7 +127,9 @@ export default function TaxDeclarationsPage() {
   });
 
   const selectedCategory = form.watch("category");
-  const categoryInfo = TAX_CATEGORIES.find((c) => c.value === selectedCategory);
+  const isNewRegime = data?.declaration?.taxRegime === "new";
+  const availableCategories = isNewRegime ? NEW_REGIME_CATEGORIES : OLD_REGIME_CATEGORIES;
+  const categoryInfo = availableCategories.find((c) => c.value === selectedCategory);
   const subtypes = selectedCategory ? CATEGORY_SUBTYPES[selectedCategory] : [];
 
   const addItemMutation = useMutation({
@@ -298,10 +310,10 @@ export default function TaxDeclarationsPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Tax Regime Selection</CardTitle>
           <CardDescription>
-            Choose your preferred tax regime for this financial year. New regime has lower rates but fewer deductions.
+            Choose your preferred tax regime for FY {declaration?.financialYear}. You can switch regimes each year.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             <Select
               value={declaration?.taxRegime || "old"}
@@ -316,17 +328,31 @@ export default function TaxDeclarationsPage() {
                 <SelectItem value="new" data-testid="option-new-regime">New Regime</SelectItem>
               </SelectContent>
             </Select>
-            <div className="text-sm text-muted-foreground">
-              {declaration?.taxRegime === "new" ? (
-                <span className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-500" />
-                  New regime: Most deductions (80C, 80D, HRA, LTA) are not applicable
-                </span>
-              ) : (
-                <span>Old regime: All deductions and exemptions applicable</span>
-              )}
-            </div>
           </div>
+          
+          {declaration?.taxRegime === "new" ? (
+            <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+              <p className="font-medium text-blue-700 dark:text-blue-300 mb-2">New Tax Regime (Default from FY 2024-25)</p>
+              <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
+                <li>Lower tax slabs with rates from 5% to 30%</li>
+                <li>Standard deduction of Rs.75,000 (automatic)</li>
+                <li>Only employer NPS contribution (80CCD(2)) allowed - up to 14% of salary</li>
+                <li>No deductions for 80C, 80D, HRA, LTA, 80G, Home Loan Interest</li>
+                <li>Best for employees with fewer investments</li>
+              </ul>
+            </div>
+          ) : (
+            <div className="p-3 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+              <p className="font-medium text-green-700 dark:text-green-300 mb-2">Old Tax Regime</p>
+              <ul className="text-sm text-green-600 dark:text-green-400 space-y-1 list-disc list-inside">
+                <li>All deductions available: 80C (Rs.1.5L), 80D (Health Insurance), HRA, LTA</li>
+                <li>Home Loan Interest deduction u/s 24(b) - up to Rs.2L</li>
+                <li>Section 80E (Education Loan), 80G (Donations)</li>
+                <li>NPS deduction u/s 80CCD(1B) - additional Rs.50,000</li>
+                <li>Best for employees with significant investments and deductions</li>
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -400,7 +426,7 @@ export default function TaxDeclarationsPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {TAX_CATEGORIES.map((cat) => (
+                              {availableCategories.map((cat) => (
                                 <SelectItem key={cat.value} value={cat.value}>
                                   {cat.label}
                                 </SelectItem>
@@ -619,7 +645,7 @@ export default function TaxDeclarationsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {TAX_CATEGORIES.map((cat) => {
+            {availableCategories.map((cat) => {
               const total = categoryTotals[cat.value] || 0;
               const isOverLimit = cat.limit && total > cat.limit;
               return (
