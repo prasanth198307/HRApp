@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, CheckCircle, RotateCcw, FileText, Clock, Users } from "lucide-react";
+import { Eye, CheckCircle, RotateCcw, FileText, Clock, Users, Download } from "lucide-react";
 import type { TaxDeclaration, TaxDeclarationItem } from "@shared/schema";
 
 // All categories for display purposes
@@ -239,16 +239,38 @@ export default function OrgAdminTaxDeclarationsPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">Tax Declarations</h1>
           <p className="text-muted-foreground">Review and verify employee tax declarations</p>
         </div>
-        <Select value={selectedYear} onValueChange={setSelectedYear}>
-          <SelectTrigger className="w-[180px]" data-testid="select-year">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {yearOptions.map((year) => (
-              <SelectItem key={year} value={year}>FY {year}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-[180px]" data-testid="select-year">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearOptions.map((year) => (
+                <SelectItem key={year} value={year}>FY {year}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = `/api/org/tax-declarations/export?year=${selectedYear}`;
+            }}
+            data-testid="button-export-summary"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Summary
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = `/api/org/tax-declarations/export-details?year=${selectedYear}`;
+            }}
+            data-testid="button-export-details"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Details
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

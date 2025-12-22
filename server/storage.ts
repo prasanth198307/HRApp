@@ -185,6 +185,7 @@ export interface IStorage {
   // Tax Declarations
   getTaxDeclarationsByEmployee(employeeId: string): Promise<TaxDeclaration[]>;
   getTaxDeclarationsByOrg(organizationId: string, year?: string): Promise<TaxDeclaration[]>;
+  getAllTaxDeclarations(year?: string): Promise<TaxDeclaration[]>;
   getTaxDeclaration(id: string): Promise<TaxDeclaration | undefined>;
   getTaxDeclarationByEmployeeAndYear(employeeId: string, financialYear: string): Promise<TaxDeclaration | undefined>;
   createTaxDeclaration(declaration: InsertTaxDeclaration): Promise<TaxDeclaration>;
@@ -905,6 +906,16 @@ export class DatabaseStorage implements IStorage {
     }
     return db.select().from(taxDeclarations)
       .where(eq(taxDeclarations.organizationId, organizationId))
+      .orderBy(desc(taxDeclarations.financialYear));
+  }
+
+  async getAllTaxDeclarations(year?: string): Promise<TaxDeclaration[]> {
+    if (year) {
+      return db.select().from(taxDeclarations)
+        .where(eq(taxDeclarations.financialYear, year))
+        .orderBy(desc(taxDeclarations.createdAt));
+    }
+    return db.select().from(taxDeclarations)
       .orderBy(desc(taxDeclarations.financialYear));
   }
 
