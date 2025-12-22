@@ -1149,6 +1149,28 @@ export async function registerRoutes(
     }
   });
 
+  // Get employee photo (serves the image directly)
+  app.get("/api/employees/:id/photo", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const employee = await storage.getEmployee(req.params.id);
+      if (!employee || employee.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      const documents = await storage.getDocumentsByEmployee(req.params.id);
+      const photoDoc = documents.find(d => d.documentType === "photo");
+      
+      if (!photoDoc || !fs.existsSync(photoDoc.filePath)) {
+        return res.status(404).json({ message: "No photo found" });
+      }
+
+      res.setHeader("Content-Type", photoDoc.mimeType);
+      res.sendFile(photoDoc.filePath);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.delete("/api/documents/:id", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
       const doc = await storage.getDocument(req.params.id);

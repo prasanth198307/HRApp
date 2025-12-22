@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye, History, Upload, Download, FileText, Trash2, File } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -647,9 +648,12 @@ export default function Employees() {
                     <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
-                            {emp.firstName.charAt(0)}{emp.lastName.charAt(0)}
-                          </div>
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={`/api/employees/${emp.id}/photo`} alt={`${emp.firstName} ${emp.lastName}`} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                              {emp.firstName.charAt(0)}{emp.lastName.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
                           <div>
                             <p className="font-medium">{emp.firstName} {emp.lastName}</p>
                             <p className="text-sm text-muted-foreground">{emp.employeeCode}</p>
@@ -849,9 +853,12 @@ export default function Employees() {
           {viewingEmployee && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary text-xl font-semibold">
-                  {viewingEmployee.firstName.charAt(0)}{viewingEmployee.lastName.charAt(0)}
-                </div>
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={`/api/employees/${viewingEmployee.id}/photo`} alt={`${viewingEmployee.firstName} ${viewingEmployee.lastName}`} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
+                    {viewingEmployee.firstName.charAt(0)}{viewingEmployee.lastName.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
                 <div>
                   <h3 className="text-xl font-semibold">
                     {viewingEmployee.firstName} {viewingEmployee.lastName}
@@ -1005,9 +1012,12 @@ export default function Employees() {
           {managingDocuments && (
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
-                  {managingDocuments.firstName.charAt(0)}{managingDocuments.lastName.charAt(0)}
-                </div>
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={`/api/employees/${managingDocuments.id}/photo`} alt={`${managingDocuments.firstName} ${managingDocuments.lastName}`} />
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                    {managingDocuments.firstName.charAt(0)}{managingDocuments.lastName.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
                 <div>
                   <h3 className="font-semibold">
                     {managingDocuments.firstName} {managingDocuments.lastName}
@@ -1082,7 +1092,7 @@ export default function Employees() {
                               {doc.documentName || doc.fileName}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              {getDocumentTypeLabel(doc.documentType)} - {(doc.fileSize / 1024).toFixed(1)} KB
+                              {getDocumentTypeLabel(doc.documentType)}{doc.fileSize ? ` - ${(doc.fileSize / 1024).toFixed(1)} KB` : ""}
                             </p>
                           </div>
                         </div>
