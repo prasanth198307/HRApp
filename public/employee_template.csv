@@ -1,3 +1,3 @@
-firstName,lastName,email,phone,department,designation,dateOfJoining,salary,address,emergencyContact
-John,Doe,john.doe@example.com,+1234567890,Engineering,Software Engineer,2024-01-15,50000,123 Main St,+1234567891
-Jane,Smith,jane.smith@example.com,+1234567892,HR,HR Manager,2024-02-01,60000,456 Oak Ave,+1234567893
+employeeCode,firstName,lastName,email,phone,department,designation,dateOfJoining,salary,address,emergencyContact
+EMP001,John,Doe,john.doe@example.com,+1234567890,Engineering,Software Engineer,2024-01-15,50000,123 Main St,+1234567891
+EMP002,Jane,Smith,jane.smith@example.com,+1234567892,HR,HR Manager,2024-02-01,60000,456 Oak Ave,+1234567893

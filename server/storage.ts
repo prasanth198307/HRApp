@@ -47,8 +47,11 @@ import {
   type TimeEntry,
   type InsertCompOffGrant,
   type CompOffGrant,
+  type InsertEmployeeDocument,
+  type EmployeeDocument,
   timeEntries,
   compOffGrants,
+  employeeDocuments,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -75,10 +78,14 @@ export interface IStorage {
   getEmployee(id: string): Promise<Employee | undefined>;
   getEmployeeByEmail(organizationId: string, email: string): Promise<Employee | undefined>;
   getEmployeeByCode(organizationId: string, employeeCode: string): Promise<Employee | undefined>;
-  getNextEmployeeNumber(organizationId: string): Promise<number>;
-  generateEmployeeCode(organizationId: string): Promise<string>;
   createEmployee(emp: InsertEmployee): Promise<Employee>;
   updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined>;
+  
+  // Employee Documents
+  getDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]>;
+  getDocument(id: string): Promise<EmployeeDocument | undefined>;
+  createDocument(doc: InsertEmployeeDocument): Promise<EmployeeDocument>;
+  deleteDocument(id: string): Promise<void>;
   
   // Employment Periods (history)
   getEmploymentHistory(employeeId: string): Promise<EmploymentPeriod[]>;
@@ -294,24 +301,6 @@ export class DatabaseStorage implements IStorage {
     return emp;
   }
 
-  async getNextEmployeeNumber(organizationId: string): Promise<number> {
-    const result = await db.select({ count: sql<number>`count(*)::int` })
-      .from(employees)
-      .where(eq(employees.organizationId, organizationId));
-    return (result[0]?.count || 0) + 1;
-  }
-
-  async generateEmployeeCode(organizationId: string): Promise<string> {
-    const org = await this.getOrganization(organizationId);
-    if (!org) {
-      throw new Error("Organization not found");
-    }
-    const orgCode = org.code || org.name.substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const nextNumber = await this.getNextEmployeeNumber(organizationId);
-    const paddedNumber = String(nextNumber).padStart(4, '0');
-    return `${orgCode}${paddedNumber}`;
-  }
-
   async createEmployee(emp: InsertEmployee): Promise<Employee> {
     const [created] = await db.insert(employees).values(emp).returning();
     return created;
@@ -320,6 +309,27 @@ export class DatabaseStorage implements IStorage {
   async updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined> {
     const [updated] = await db.update(employees).set(data).where(eq(employees.id, id)).returning();
     return updated;
+  }
+
+  // Employee Documents
+  async getDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]> {
+    return db.select().from(employeeDocuments)
+      .where(eq(employeeDocuments.employeeId, employeeId))
+      .orderBy(desc(employeeDocuments.uploadedAt));
+  }
+
+  async getDocument(id: string): Promise<EmployeeDocument | undefined> {
+    const [doc] = await db.select().from(employeeDocuments).where(eq(employeeDocuments.id, id));
+    return doc;
+  }
+
+  async createDocument(doc: InsertEmployeeDocument): Promise<EmployeeDocument> {
+    const [created] = await db.insert(employeeDocuments).values(doc).returning();
+    return created;
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    await db.delete(employeeDocuments).where(eq(employeeDocuments.id, id));
   }
 
   // Employment Periods (history)

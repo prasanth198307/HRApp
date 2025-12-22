@@ -90,6 +90,33 @@ const upload = multer({
   },
 });
 
+const documentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const employeeId = req.params.id;
+      const uploadDir = path.join(process.cwd(), "uploads", "documents", employeeId);
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + "-" + file.originalname);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF, DOC, and image files are allowed"));
+    }
+  },
+});
+
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.appUser) {
@@ -563,9 +590,16 @@ export async function registerRoutes(
       for (let i = 0; i < employeeData.length; i++) {
         const row = employeeData[i];
         try {
-          // Validate required fields (employeeCode no longer required - auto-generated)
-          if (!row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
-            results.errors.push({ row: i + 1, message: "Missing required fields (firstName, lastName, email, dateOfJoining)" });
+          // Validate required fields
+          if (!row.employeeCode || !row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
+            results.errors.push({ row: i + 1, message: "Missing required fields (employeeCode, firstName, lastName, email, dateOfJoining)" });
+            continue;
+          }
+
+          // Check for duplicate employee code
+          const existingByCode = await storage.getEmployeeByCode(organizationId, row.employeeCode);
+          if (existingByCode) {
+            results.errors.push({ row: i + 1, message: `Employee with code ${row.employeeCode} already exists` });
             continue;
           }
 
@@ -576,11 +610,8 @@ export async function registerRoutes(
             continue;
           }
 
-          // Auto-generate employee code
-          const employeeCode = await storage.generateEmployeeCode(organizationId);
-
           const emp = await storage.createEmployee({
-            employeeCode,
+            employeeCode: row.employeeCode,
             firstName: row.firstName,
             lastName: row.lastName,
             email: row.email,
@@ -877,11 +908,19 @@ export async function registerRoutes(
   app.post("/api/employees", requireAuth, requireOrgAdmin, async (req, res) => {
     try {
       const organizationId = req.appUser!.organizationId!;
-      const employeeCode = await storage.generateEmployeeCode(organizationId);
+      
+      if (!req.body.employeeCode) {
+        return res.status(400).json({ message: "Employee code is required" });
+      }
+      
+      // Check for duplicate employee code
+      const existingByCode = await storage.getEmployeeByCode(organizationId, req.body.employeeCode);
+      if (existingByCode) {
+        return res.status(400).json({ message: `Employee with code ${req.body.employeeCode} already exists` });
+      }
       
       const emp = await storage.createEmployee({
         ...req.body,
-        employeeCode,
         organizationId,
       });
 
@@ -918,9 +957,16 @@ export async function registerRoutes(
       for (let i = 0; i < employeeData.length; i++) {
         const row = employeeData[i];
         try {
-          // Validate required fields (employeeCode no longer required - auto-generated)
-          if (!row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
-            results.errors.push({ row: i + 1, message: "Missing required fields (firstName, lastName, email, dateOfJoining)" });
+          // Validate required fields
+          if (!row.employeeCode || !row.firstName || !row.lastName || !row.email || !row.dateOfJoining) {
+            results.errors.push({ row: i + 1, message: "Missing required fields (employeeCode, firstName, lastName, email, dateOfJoining)" });
+            continue;
+          }
+
+          // Check for duplicate employee code
+          const existingByCode = await storage.getEmployeeByCode(organizationId, row.employeeCode);
+          if (existingByCode) {
+            results.errors.push({ row: i + 1, message: `Employee with code ${row.employeeCode} already exists` });
             continue;
           }
 
@@ -931,11 +977,8 @@ export async function registerRoutes(
             continue;
           }
 
-          // Auto-generate employee code
-          const employeeCode = await storage.generateEmployeeCode(organizationId);
-
           const emp = await storage.createEmployee({
-            employeeCode,
+            employeeCode: row.employeeCode,
             firstName: row.firstName,
             lastName: row.lastName,
             email: row.email,
@@ -974,6 +1017,14 @@ export async function registerRoutes(
       const existing = await storage.getEmployee(req.params.id);
       if (!existing || existing.organizationId !== req.appUser!.organizationId) {
         return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      // Check for duplicate employee code if being updated
+      if (req.body.employeeCode && req.body.employeeCode !== existing.employeeCode) {
+        const existingByCode = await storage.getEmployeeByCode(req.appUser!.organizationId!, req.body.employeeCode);
+        if (existingByCode && existingByCode.id !== req.params.id) {
+          return res.status(400).json({ message: `Employee with code ${req.body.employeeCode} already exists` });
+        }
       }
       
       const emp = await storage.updateEmployee(req.params.id, req.body);
@@ -1023,6 +1074,100 @@ export async function registerRoutes(
 
       const history = await storage.getEmploymentHistory(req.params.id);
       res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee Documents
+  app.get("/api/employees/:id/documents", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const employee = await storage.getEmployee(req.params.id);
+      if (!employee || employee.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      const documents = await storage.getDocumentsByEmployee(req.params.id);
+      res.json(documents);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/employees/:id/documents", requireAuth, requireOrgAdmin, documentUpload.single("file"), async (req, res) => {
+    try {
+      const employee = await storage.getEmployee(req.params.id);
+      if (!employee || employee.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const validDocTypes = ["offer_letter", "appointment_letter", "aadhar", "pan", "photo", "other"];
+      if (!validDocTypes.includes(req.body.documentType)) {
+        return res.status(400).json({ message: "Invalid document type" });
+      }
+
+      const doc = await storage.createDocument({
+        employeeId: req.params.id,
+        organizationId: employee.organizationId,
+        documentType: req.body.documentType,
+        documentName: req.body.documentName || null,
+        fileName: req.file.originalname,
+        filePath: req.file.path,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        uploadedBy: req.appUser!.id,
+      });
+
+      res.status(201).json(doc);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/documents/:id/download", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      const doc = await storage.getDocument(req.params.id);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const employee = await storage.getEmployee(doc.employeeId);
+      if (!employee || employee.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      if (!fs.existsSync(doc.filePath)) {
+        return res.status(404).json({ message: "File not found on server" });
+      }
+
+      res.download(doc.filePath, doc.fileName);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/documents/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const doc = await storage.getDocument(req.params.id);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const employee = await storage.getEmployee(doc.employeeId);
+      if (!employee || employee.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Delete file from disk
+      if (fs.existsSync(doc.filePath)) {
+        fs.unlinkSync(doc.filePath);
+      }
+
+      await storage.deleteDocument(req.params.id);
+      res.json({ message: "Document deleted successfully" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

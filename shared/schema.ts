@@ -25,6 +25,7 @@ export const onboardingTaskStatusEnum = pgEnum("onboarding_task_status", ["pendi
 export const timeEntryTypeEnum = pgEnum("time_entry_type", ["check_in", "check_out"]);
 export const halfDaySessionEnum = pgEnum("half_day_session", ["AM", "PM"]);
 export const compOffSourceEnum = pgEnum("comp_off_source", ["overtime", "holiday_work", "manual"]);
+export const documentTypeEnum = pgEnum("document_type", ["offer_letter", "appointment_letter", "aadhar", "pan", "photo", "other"]);
 
 // Organizations table
 export const organizations = pgTable("organizations", {
@@ -86,6 +87,21 @@ export const employees = pgTable("employees", {
   emergencyContact: text("emergency_contact"),
   profileImageUrl: text("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Employee Documents table
+export const employeeDocuments = pgTable("employee_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  documentType: documentTypeEnum("document_type").notNull(),
+  documentName: text("document_name"),
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
+  uploadedBy: varchar("uploaded_by").references(() => appUsers.id),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
 // Employment Periods table (tracks employment history - join/exit cycles)
@@ -454,6 +470,11 @@ export const insertCompOffGrantSchema = createInsertSchema(compOffGrants).omit({
   createdAt: true,
 });
 
+export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 // Types
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
@@ -502,6 +523,19 @@ export type TimeEntry = typeof timeEntries.$inferSelect;
 
 export type InsertCompOffGrant = z.infer<typeof insertCompOffGrantSchema>;
 export type CompOffGrant = typeof compOffGrants.$inferSelect;
+
+export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
+export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+
+// Document type options for frontend
+export const documentTypeOptions = [
+  { value: "offer_letter", label: "Offer Letter" },
+  { value: "appointment_letter", label: "Appointment Letter" },
+  { value: "aadhar", label: "Aadhar Card" },
+  { value: "pan", label: "PAN Card" },
+  { value: "photo", label: "Passport Photo" },
+  { value: "other", label: "Other Document" },
+] as const;
 
 // Industry options for frontend
 export const industryOptions = [
