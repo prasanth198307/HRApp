@@ -19,6 +19,7 @@ import {
   Clock,
   Timer,
   Download,
+  Receipt,
 } from "lucide-react";
 import {
   Sidebar,
@@ -73,6 +74,7 @@ const orgAdminNavItems = [
   { title: "Payslips", url: "/payslips", icon: FileText },
   { title: "Leave Policies", url: "/leave-policies", icon: CalendarCheck },
   { title: "Leave Requests", url: "/leave-requests", icon: CalendarX },
+  { title: "Tax Declarations", url: "/tax-declarations", icon: Receipt },
   { title: "Holidays", url: "/holidays", icon: CalendarDays },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "User Accounts", url: "/user-accounts", icon: UserPlus },
@@ -84,6 +86,7 @@ const employeeNavItems = [
   { title: "My Time Entries", url: "/my-time-entries", icon: Timer },
   { title: "My Payslips", url: "/my-payslips", icon: FileText },
   { title: "My Leaves", url: "/my-leaves", icon: CalendarCheck },
+  { title: "Tax Declarations", url: "/tax-declarations", icon: Receipt },
   { title: "Holidays", url: "/holidays", icon: CalendarDays },
 ];
 

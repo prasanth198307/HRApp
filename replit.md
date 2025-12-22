@@ -36,6 +36,8 @@ The application is built with a multi-tenant architecture ensuring complete data
     -   `time_entries`: Records employee check-in/check-out times.
     -   `comp_off_grants`: Manages compensatory off grants.
     -   `employee_documents`: Stores employee document metadata (offer letters, appointment letters, Aadhar, PAN, photos, and other documents).
+    -   `tax_declarations`: Stores employee income tax declarations (Form 12BB) by financial year with status workflow.
+    -   `tax_declaration_items`: Individual investment/deduction items within a tax declaration.
 
 **Key Features & Technical Implementations:**
 -   **Employee Lifecycle Management:** Comprehensive tracking from onboarding to exit.
@@ -61,6 +63,12 @@ The application is built with a multi-tenant architecture ensuring complete data
     -   Upload and manage employee documents (offer letters, appointment letters, Aadhar, PAN, photos, other documents).
     -   Secure file storage with download and delete capabilities.
     -   File type validation (PDF, DOC, DOCX, JPG, JPEG, PNG) with 10MB size limit.
+-   **Income Tax Declaration (Form 12BB):**
+    -   Employees can submit annual tax declarations for TDS calculation.
+    -   Support for all major Indian tax sections: 80C, 80CCD (NPS), 80D (Medical), 80E, 80G, HRA, LTA.
+    -   Declaration workflow: draft → submitted → verified.
+    -   Org Admin verification with ability to approve amounts or request changes.
+    -   Category-wise limits and summary display.
 
 ## External Dependencies
 -   **Database:** PostgreSQL
