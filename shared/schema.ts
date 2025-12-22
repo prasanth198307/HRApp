@@ -27,6 +27,12 @@ export const halfDaySessionEnum = pgEnum("half_day_session", ["AM", "PM"]);
 export const compOffSourceEnum = pgEnum("comp_off_source", ["overtime", "holiday_work", "manual"]);
 export const documentTypeEnum = pgEnum("document_type", ["offer_letter", "appointment_letter", "aadhar", "pan", "photo", "other"]);
 
+// Tax Declaration Enums
+export const taxDeclarationStatusEnum = pgEnum("tax_declaration_status", ["draft", "submitted", "verified"]);
+export const taxDeductionCategoryEnum = pgEnum("tax_deduction_category", [
+  "80C", "80CCD", "80D", "80E", "80G", "HRA", "LTA", "OTHER"
+]);
+
 // Organizations table
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -291,6 +297,36 @@ export const compOffGrants = pgTable("comp_off_grants", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tax Declarations table (Form 12BB - Investment Declaration)
+export const taxDeclarations = pgTable("tax_declarations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  financialYear: varchar("financial_year", { length: 9 }).notNull(), // e.g., "2024-2025"
+  status: taxDeclarationStatusEnum("status").notNull().default("draft"),
+  totalDeclared: numeric("total_declared", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalApproved: numeric("total_approved", { precision: 12, scale: 2 }),
+  submittedAt: timestamp("submitted_at"),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: varchar("verified_by").references(() => appUsers.id),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Tax Declaration Items table (individual deduction entries)
+export const taxDeclarationItems = pgTable("tax_declaration_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  declarationId: varchar("declaration_id").notNull().references(() => taxDeclarations.id, { onDelete: "cascade" }),
+  category: taxDeductionCategoryEnum("category").notNull(), // 80C, 80D, HRA, etc.
+  subType: text("sub_type"), // e.g., "PPF", "ELSS", "LIC Premium" for 80C
+  description: text("description"), // Additional details
+  amountDeclared: numeric("amount_declared", { precision: 12, scale: 2 }).notNull(),
+  amountApproved: numeric("amount_approved", { precision: 12, scale: 2 }),
+  providerName: text("provider_name"), // e.g., bank name, insurance company
+  policyNumber: text("policy_number"), // Reference number if applicable
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   employees: many(employees),
@@ -386,6 +422,29 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const taxDeclarationsRelations = relations(taxDeclarations, ({ one, many }) => ({
+  employee: one(employees, {
+    fields: [taxDeclarations.employeeId],
+    references: [employees.id],
+  }),
+  organization: one(organizations, {
+    fields: [taxDeclarations.organizationId],
+    references: [organizations.id],
+  }),
+  verifier: one(appUsers, {
+    fields: [taxDeclarations.verifiedBy],
+    references: [appUsers.id],
+  }),
+  items: many(taxDeclarationItems),
+}));
+
+export const taxDeclarationItemsRelations = relations(taxDeclarationItems, ({ one }) => ({
+  declaration: one(taxDeclarations, {
+    fields: [taxDeclarationItems.declarationId],
+    references: [taxDeclarations.id],
+  }),
+}));
+
 // Insert Schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -475,6 +534,18 @@ export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments
   uploadedAt: true,
 });
 
+export const insertTaxDeclarationSchema = createInsertSchema(taxDeclarations).omit({
+  id: true,
+  createdAt: true,
+  submittedAt: true,
+  verifiedAt: true,
+});
+
+export const insertTaxDeclarationItemSchema = createInsertSchema(taxDeclarationItems).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
@@ -526,6 +597,12 @@ export type CompOffGrant = typeof compOffGrants.$inferSelect;
 
 export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+
+export type InsertTaxDeclaration = z.infer<typeof insertTaxDeclarationSchema>;
+export type TaxDeclaration = typeof taxDeclarations.$inferSelect;
+
+export type InsertTaxDeclarationItem = z.infer<typeof insertTaxDeclarationItemSchema>;
+export type TaxDeclarationItem = typeof taxDeclarationItems.$inferSelect;
 
 // Document type options for frontend
 export const documentTypeOptions = [
@@ -604,4 +681,44 @@ export const carryForwardTypeOptions = [
   { value: "none", label: "No Carry Forward" },
   { value: "limited", label: "Limited (with max limit)" },
   { value: "unlimited", label: "Unlimited Carry Forward" },
+] as const;
+
+// Tax Declaration options for frontend
+export const taxDeductionCategoryOptions = [
+  { value: "80C", label: "Section 80C", limit: 150000, description: "PPF, ELSS, LIC, NSC, Tax Saver FD, etc." },
+  { value: "80CCD", label: "Section 80CCD(1B)", limit: 50000, description: "Additional NPS contribution" },
+  { value: "80D", label: "Section 80D", limit: 100000, description: "Health Insurance Premium" },
+  { value: "80E", label: "Section 80E", limit: null, description: "Education Loan Interest" },
+  { value: "80G", label: "Section 80G", limit: null, description: "Donations to approved funds" },
+  { value: "HRA", label: "House Rent Allowance", limit: null, description: "Rent paid for accommodation" },
+  { value: "LTA", label: "Leave Travel Allowance", limit: null, description: "Travel expenses for leave" },
+  { value: "OTHER", label: "Other Deductions", limit: null, description: "Any other eligible deductions" },
+] as const;
+
+export const taxDeclarationStatusOptions = [
+  { value: "draft", label: "Draft", color: "gray" },
+  { value: "submitted", label: "Submitted", color: "blue" },
+  { value: "verified", label: "Verified", color: "green" },
+] as const;
+
+// Common 80C sub-types
+export const section80CSubTypes = [
+  "PPF (Public Provident Fund)",
+  "ELSS (Equity Linked Savings Scheme)",
+  "LIC Premium",
+  "NSC (National Savings Certificate)",
+  "Tax Saver Fixed Deposit",
+  "Sukanya Samriddhi Account",
+  "EPF (Employee Provident Fund)",
+  "Home Loan Principal",
+  "Tuition Fees",
+  "ULIP",
+  "Other 80C Investment",
+] as const;
+
+// Common 80D sub-types
+export const section80DSubTypes = [
+  "Self & Family Health Insurance",
+  "Parents Health Insurance",
+  "Preventive Health Checkup",
 ] as const;
