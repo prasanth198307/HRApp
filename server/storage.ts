@@ -49,9 +49,15 @@ import {
   type CompOffGrant,
   type InsertEmployeeDocument,
   type EmployeeDocument,
+  type InsertTaxDeclaration,
+  type TaxDeclaration,
+  type InsertTaxDeclarationItem,
+  type TaxDeclarationItem,
   timeEntries,
   compOffGrants,
   employeeDocuments,
+  taxDeclarations,
+  taxDeclarationItems,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -175,6 +181,23 @@ export interface IStorage {
   getPendingCompOffGrants(organizationId: string): Promise<CompOffGrant[]>;
   createCompOffGrant(grant: InsertCompOffGrant): Promise<CompOffGrant>;
   applyCompOffGrant(id: string): Promise<CompOffGrant | undefined>;
+
+  // Tax Declarations
+  getTaxDeclarationsByEmployee(employeeId: string): Promise<TaxDeclaration[]>;
+  getTaxDeclarationsByOrg(organizationId: string, year?: string): Promise<TaxDeclaration[]>;
+  getTaxDeclaration(id: string): Promise<TaxDeclaration | undefined>;
+  getTaxDeclarationByEmployeeAndYear(employeeId: string, financialYear: string): Promise<TaxDeclaration | undefined>;
+  createTaxDeclaration(declaration: InsertTaxDeclaration): Promise<TaxDeclaration>;
+  updateTaxDeclaration(id: string, data: Partial<InsertTaxDeclaration>): Promise<TaxDeclaration | undefined>;
+  deleteTaxDeclaration(id: string): Promise<void>;
+
+  // Tax Declaration Items
+  getTaxDeclarationItems(declarationId: string): Promise<TaxDeclarationItem[]>;
+  getTaxDeclarationItem(id: string): Promise<TaxDeclarationItem | undefined>;
+  createTaxDeclarationItem(item: InsertTaxDeclarationItem): Promise<TaxDeclarationItem>;
+  updateTaxDeclarationItem(id: string, data: Partial<InsertTaxDeclarationItem>): Promise<TaxDeclarationItem | undefined>;
+  deleteTaxDeclarationItem(id: string): Promise<void>;
+  deleteTaxDeclarationItemsByDeclaration(declarationId: string): Promise<void>;
 
   // Stats
   getSuperAdminStats(): Promise<{
@@ -862,6 +885,93 @@ export class DatabaseStorage implements IStorage {
       .where(eq(compOffGrants.id, id))
       .returning();
     return updated;
+  }
+
+  // Tax Declarations
+  async getTaxDeclarationsByEmployee(employeeId: string): Promise<TaxDeclaration[]> {
+    return db.select().from(taxDeclarations)
+      .where(eq(taxDeclarations.employeeId, employeeId))
+      .orderBy(desc(taxDeclarations.financialYear));
+  }
+
+  async getTaxDeclarationsByOrg(organizationId: string, year?: string): Promise<TaxDeclaration[]> {
+    if (year) {
+      return db.select().from(taxDeclarations)
+        .where(and(
+          eq(taxDeclarations.organizationId, organizationId),
+          eq(taxDeclarations.financialYear, year)
+        ))
+        .orderBy(desc(taxDeclarations.createdAt));
+    }
+    return db.select().from(taxDeclarations)
+      .where(eq(taxDeclarations.organizationId, organizationId))
+      .orderBy(desc(taxDeclarations.financialYear));
+  }
+
+  async getTaxDeclaration(id: string): Promise<TaxDeclaration | undefined> {
+    const [declaration] = await db.select().from(taxDeclarations)
+      .where(eq(taxDeclarations.id, id));
+    return declaration;
+  }
+
+  async getTaxDeclarationByEmployeeAndYear(employeeId: string, financialYear: string): Promise<TaxDeclaration | undefined> {
+    const [declaration] = await db.select().from(taxDeclarations)
+      .where(and(
+        eq(taxDeclarations.employeeId, employeeId),
+        eq(taxDeclarations.financialYear, financialYear)
+      ));
+    return declaration;
+  }
+
+  async createTaxDeclaration(declaration: InsertTaxDeclaration): Promise<TaxDeclaration> {
+    const [created] = await db.insert(taxDeclarations).values(declaration).returning();
+    return created;
+  }
+
+  async updateTaxDeclaration(id: string, data: Partial<InsertTaxDeclaration>): Promise<TaxDeclaration | undefined> {
+    const [updated] = await db.update(taxDeclarations)
+      .set(data)
+      .where(eq(taxDeclarations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaxDeclaration(id: string): Promise<void> {
+    await db.delete(taxDeclarations).where(eq(taxDeclarations.id, id));
+  }
+
+  // Tax Declaration Items
+  async getTaxDeclarationItems(declarationId: string): Promise<TaxDeclarationItem[]> {
+    return db.select().from(taxDeclarationItems)
+      .where(eq(taxDeclarationItems.declarationId, declarationId))
+      .orderBy(taxDeclarationItems.category);
+  }
+
+  async getTaxDeclarationItem(id: string): Promise<TaxDeclarationItem | undefined> {
+    const [item] = await db.select().from(taxDeclarationItems)
+      .where(eq(taxDeclarationItems.id, id));
+    return item;
+  }
+
+  async createTaxDeclarationItem(item: InsertTaxDeclarationItem): Promise<TaxDeclarationItem> {
+    const [created] = await db.insert(taxDeclarationItems).values(item).returning();
+    return created;
+  }
+
+  async updateTaxDeclarationItem(id: string, data: Partial<InsertTaxDeclarationItem>): Promise<TaxDeclarationItem | undefined> {
+    const [updated] = await db.update(taxDeclarationItems)
+      .set(data)
+      .where(eq(taxDeclarationItems.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaxDeclarationItem(id: string): Promise<void> {
+    await db.delete(taxDeclarationItems).where(eq(taxDeclarationItems.id, id));
+  }
+
+  async deleteTaxDeclarationItemsByDeclaration(declarationId: string): Promise<void> {
+    await db.delete(taxDeclarationItems).where(eq(taxDeclarationItems.declarationId, declarationId));
   }
 }
 
