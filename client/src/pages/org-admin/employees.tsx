@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye, History, Upload, Download } from "lucide-react";
+import { Users, Plus, Search, Edit, UserMinus, UserPlus, Eye, History, Upload, Download, FileText, Trash2, File } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -43,7 +43,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import type { Employee, InsertEmployee, EmploymentPeriod } from "@shared/schema";
+import type { Employee, InsertEmployee, EmploymentPeriod, EmployeeDocument } from "@shared/schema";
 import { employmentStatusOptions } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -78,6 +78,9 @@ export default function Employees() {
   const [exitingEmployee, setExitingEmployee] = useState<Employee | null>(null);
   const [bulkUploadDialogOpen, setBulkUploadDialogOpen] = useState(false);
   const [uploadResults, setUploadResults] = useState<{ success: number; errors: Array<{ row: number; message: string }> } | null>(null);
+  const [managingDocuments, setManagingDocuments] = useState<Employee | null>(null);
+  const [documentType, setDocumentType] = useState<string>("offer_letter");
+  const [documentName, setDocumentName] = useState<string>("");
   const { toast } = useToast();
 
   const { data: employees, isLoading } = useQuery<Employee[]>({
@@ -88,6 +91,50 @@ export default function Employees() {
     queryKey: ["/api/employees", viewingEmployee?.id, "history"],
     queryFn: () => fetch(`/api/employees/${viewingEmployee?.id}/history`, { credentials: "include" }).then(r => r.json()),
     enabled: !!viewingEmployee,
+  });
+
+  const { data: documents, isLoading: documentsLoading } = useQuery<EmployeeDocument[]>({
+    queryKey: ["/api/employees", managingDocuments?.id, "documents"],
+    queryFn: () => fetch(`/api/employees/${managingDocuments?.id}/documents`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!managingDocuments,
+  });
+
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async ({ employeeId, file, docType, docName }: { employeeId: string; file: File; docType: string; docName: string }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("documentType", docType);
+      formData.append("documentName", docName);
+      const res = await fetch(`/api/employees/${employeeId}/documents`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Upload failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", managingDocuments?.id, "documents"] });
+      setDocumentName("");
+      toast({ title: "Document uploaded successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to upload document", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (docId: string) => apiRequest("DELETE", `/api/documents/${docId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", managingDocuments?.id, "documents"] });
+      toast({ title: "Document deleted successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete document", description: error.message, variant: "destructive" });
+    },
   });
 
   const form = useForm<EmployeeFormValues>({
@@ -240,6 +287,31 @@ export default function Employees() {
     if (exitingEmployee) {
       exitMutation.mutate({ id: exitingEmployee.id, data: values });
     }
+  };
+
+  const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !managingDocuments) return;
+    
+    uploadDocumentMutation.mutate({
+      employeeId: managingDocuments.id,
+      file,
+      docType: documentType,
+      docName: documentName,
+    });
+    event.target.value = "";
+  };
+
+  const getDocumentTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      offer_letter: "Offer Letter",
+      appointment_letter: "Appointment Letter",
+      aadhar: "Aadhar Card",
+      pan: "PAN Card",
+      photo: "Passport Photo",
+      other: "Other Document",
+    };
+    return labels[type] || type;
   };
 
   const openEditDialog = (emp: Employee) => {
@@ -612,6 +684,14 @@ export default function Employees() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setManagingDocuments(emp)}
+                            data-testid={`button-documents-employee-${emp.id}`}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
                           {emp.status === "active" && (
                             <Button
                               variant="ghost"
@@ -914,6 +994,128 @@ export default function Employees() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!managingDocuments} onOpenChange={(open) => !open && setManagingDocuments(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Employee Documents</DialogTitle>
+          </DialogHeader>
+          {managingDocuments && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
+                  {managingDocuments.firstName.charAt(0)}{managingDocuments.lastName.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="font-semibold">
+                    {managingDocuments.firstName} {managingDocuments.lastName}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{managingDocuments.employeeCode}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Upload Document
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Select value={documentType} onValueChange={setDocumentType}>
+                    <SelectTrigger data-testid="select-document-type">
+                      <SelectValue placeholder="Document Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="offer_letter">Offer Letter</SelectItem>
+                      <SelectItem value="appointment_letter">Appointment Letter</SelectItem>
+                      <SelectItem value="aadhar">Aadhar Card</SelectItem>
+                      <SelectItem value="pan">PAN Card</SelectItem>
+                      <SelectItem value="photo">Passport Photo</SelectItem>
+                      <SelectItem value="other">Other Document</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="Document name (optional)"
+                    value={documentName}
+                    onChange={(e) => setDocumentName(e.target.value)}
+                    data-testid="input-document-name"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    onChange={handleDocumentUpload}
+                    disabled={uploadDocumentMutation.isPending}
+                    data-testid="input-document-file"
+                    className="flex-1"
+                  />
+                </div>
+                {uploadDocumentMutation.isPending && (
+                  <p className="text-sm text-muted-foreground">Uploading...</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <File className="h-4 w-4" />
+                  Uploaded Documents
+                </h4>
+                {documentsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : documents && documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between gap-3 rounded-md border p-3"
+                        data-testid={`document-item-${doc.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">
+                              {doc.documentName || doc.fileName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {getDocumentTypeLabel(doc.documentType)} - {(doc.fileSize / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => window.open(`/api/documents/${doc.id}/download`, "_blank")}
+                            data-testid={`button-download-document-${doc.id}`}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteDocumentMutation.mutate(doc.id)}
+                            disabled={deleteDocumentMutation.isPending}
+                            data-testid={`button-delete-document-${doc.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    No documents uploaded yet
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
