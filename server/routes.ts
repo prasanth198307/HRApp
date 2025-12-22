@@ -2565,6 +2565,34 @@ export async function registerRoutes(
     }
   });
 
+  // Employee: Update tax regime
+  app.patch("/api/employee/tax-declarations/:id/regime", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.employeeId !== req.appUser!.employeeId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "draft") {
+        return res.status(400).json({ message: "Cannot change regime after submission" });
+      }
+
+      const { taxRegime } = req.body;
+      if (!taxRegime || !["old", "new"].includes(taxRegime)) {
+        return res.status(400).json({ message: "Invalid tax regime" });
+      }
+
+      const updated = await storage.updateTaxDeclaration(declaration.id, { taxRegime });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Org Admin: Get all declarations for organization
   app.get("/api/org/tax-declarations", requireAuth, requireOrgAdmin, async (req, res) => {
     try {

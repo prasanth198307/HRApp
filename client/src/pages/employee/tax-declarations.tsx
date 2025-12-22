@@ -180,6 +180,20 @@ export default function TaxDeclarationsPage() {
     },
   });
 
+  const updateRegimeMutation = useMutation({
+    mutationFn: async (regime: "old" | "new") => {
+      const res = await apiRequest("PATCH", `/api/employee/tax-declarations/${data?.declaration.id}/regime`, { taxRegime: regime });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Tax regime updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/employee/tax-declarations/current"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const onSubmit = (values: TaxItemFormValues) => {
     if (editItem) {
       updateItemMutation.mutate({ itemId: editItem.id, values });
@@ -280,7 +294,51 @@ export default function TaxDeclarationsPage() {
         </Card>
       )}
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Tax Regime Selection</CardTitle>
+          <CardDescription>
+            Choose your preferred tax regime for this financial year. New regime has lower rates but fewer deductions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <Select
+              value={declaration?.taxRegime || "old"}
+              onValueChange={(value: "old" | "new") => updateRegimeMutation.mutate(value)}
+              disabled={!isDraft || updateRegimeMutation.isPending}
+            >
+              <SelectTrigger className="w-[200px]" data-testid="select-tax-regime">
+                <SelectValue placeholder="Select regime" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="old" data-testid="option-old-regime">Old Regime</SelectItem>
+                <SelectItem value="new" data-testid="option-new-regime">New Regime</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-sm text-muted-foreground">
+              {declaration?.taxRegime === "new" ? (
+                <span className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                  New regime: Most deductions (80C, 80D, HRA, LTA) are not applicable
+                </span>
+              ) : (
+                <span>Old regime: All deductions and exemptions applicable</span>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Tax Regime</CardDescription>
+            <CardTitle className="text-lg" data-testid="text-tax-regime">
+              {declaration?.taxRegime === "new" ? "New Regime" : "Old Regime"}
+            </CardTitle>
+          </CardHeader>
+        </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Declared</CardDescription>

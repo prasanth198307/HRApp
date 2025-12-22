@@ -350,6 +350,12 @@ export default function OrgAdminTaxDeclarationsPage() {
                   <p className="text-sm text-muted-foreground">Financial Year</p>
                   <p className="font-medium">{detailData.declaration.financialYear}</p>
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tax Regime</p>
+                  <Badge variant={detailData.declaration.taxRegime === "new" ? "outline" : "secondary"} data-testid="badge-tax-regime">
+                    {detailData.declaration.taxRegime === "new" ? "New Regime" : "Old Regime"}
+                  </Badge>
+                </div>
               </div>
 
               <div>

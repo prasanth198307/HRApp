@@ -29,6 +29,7 @@ export const documentTypeEnum = pgEnum("document_type", ["offer_letter", "appoin
 
 // Tax Declaration Enums
 export const taxDeclarationStatusEnum = pgEnum("tax_declaration_status", ["draft", "submitted", "verified"]);
+export const taxRegimeEnum = pgEnum("tax_regime", ["old", "new"]);
 export const taxDeductionCategoryEnum = pgEnum("tax_deduction_category", [
   "80C", "80CCD", "80D", "80E", "80G", "HRA", "LTA", "OTHER"
 ]);
@@ -303,6 +304,7 @@ export const taxDeclarations = pgTable("tax_declarations", {
   employeeId: varchar("employee_id").notNull().references(() => employees.id),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   financialYear: varchar("financial_year", { length: 9 }).notNull(), // e.g., "2024-2025"
+  taxRegime: taxRegimeEnum("tax_regime").notNull().default("old"),
   status: taxDeclarationStatusEnum("status").notNull().default("draft"),
   totalDeclared: numeric("total_declared", { precision: 12, scale: 2 }).notNull().default("0"),
   totalApproved: numeric("total_approved", { precision: 12, scale: 2 }),
