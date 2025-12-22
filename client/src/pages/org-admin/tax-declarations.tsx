@@ -33,15 +33,32 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, CheckCircle, RotateCcw, FileText, Clock, Users } from "lucide-react";
 import type { TaxDeclaration, TaxDeclarationItem } from "@shared/schema";
 
+// All categories for display purposes
 const TAX_CATEGORIES = [
-  { value: "80C", label: "Section 80C", limit: 150000 },
-  { value: "80CCD", label: "Section 80CCD (NPS)", limit: 50000 },
-  { value: "80D", label: "Section 80D (Medical)", limit: 100000 },
-  { value: "80E", label: "Section 80E", limit: null },
-  { value: "80G", label: "Section 80G", limit: null },
-  { value: "HRA", label: "HRA Exemption", limit: null },
-  { value: "LTA", label: "LTA", limit: null },
-  { value: "OTHER", label: "Other Deductions", limit: null },
+  // Old Regime categories
+  { value: "HRA", label: "HRA - House Rent Allowance" },
+  { value: "LTA", label: "LTA - Leave Travel Allowance" },
+  { value: "HOME_LOAN_INTEREST", label: "Home Loan Interest - Section 24(b)" },
+  { value: "80C", label: "Section 80C Investments" },
+  { value: "80CCD_EMPLOYEE", label: "Section 80CCD(1B) - Employee NPS" },
+  { value: "80CCD_EMPLOYER", label: "Section 80CCD(2) - Employer NPS" },
+  { value: "80D", label: "Section 80D - Health Insurance" },
+  { value: "80DD", label: "Section 80DD - Disabled Dependent" },
+  { value: "80DDB", label: "Section 80DDB - Medical Treatment" },
+  { value: "80E", label: "Section 80E - Education Loan Interest" },
+  { value: "80EE", label: "Section 80EE/80EEA - First Home Buyer" },
+  { value: "80G", label: "Section 80G - Donations" },
+  { value: "80GG", label: "Section 80GG - Rent (No HRA)" },
+  { value: "80TTA", label: "Section 80TTA/80TTB - Savings Interest" },
+  { value: "80U", label: "Section 80U - Person with Disability" },
+  { value: "OTHER", label: "Other Deductions" },
+  // New Regime categories
+  { value: "AGNIVEER", label: "Section 80CCH - Agniveer Corpus Fund" },
+  { value: "HOME_LOAN_INTEREST_LET_OUT", label: "Home Loan Interest (Let-Out Property)" },
+  { value: "FAMILY_PENSION", label: "Family Pension Deduction" },
+  { value: "TRANSPORT_DISABLED", label: "Transport Allowance (Disabled)" },
+  { value: "GRATUITY", label: "Gratuity Exemption" },
+  { value: "LEAVE_ENCASHMENT", label: "Leave Encashment Exemption" },
 ] as const;
 
 const CATEGORY_SUBTYPES: Record<string, { value: string; label: string }[]> = {
@@ -49,18 +66,34 @@ const CATEGORY_SUBTYPES: Record<string, { value: string; label: string }[]> = {
     { value: "PPF", label: "Public Provident Fund (PPF)" },
     { value: "ELSS", label: "ELSS Mutual Funds" },
     { value: "LIC", label: "Life Insurance Premium" },
-    { value: "ULIP", label: "ULIP" },
+    { value: "ULIP", label: "Unit Linked Insurance Plan" },
     { value: "NSC", label: "National Savings Certificate" },
-    { value: "TAX_SAVER_FD", label: "Tax Saver Fixed Deposit" },
-    { value: "TUITION", label: "Tuition Fees" },
-    { value: "HOME_LOAN_PRINCIPAL", label: "Home Loan Principal" },
+    { value: "TAX_SAVER_FD", label: "5-Year Tax Saver Fixed Deposit" },
+    { value: "TUITION", label: "Children's Tuition Fees" },
+    { value: "HOME_LOAN_PRINCIPAL", label: "Home Loan Principal Repayment" },
     { value: "SUKANYA", label: "Sukanya Samriddhi Yojana" },
+    { value: "SCSS", label: "Senior Citizens Savings Scheme" },
+    { value: "EPF", label: "Employee Provident Fund (EPF)" },
     { value: "OTHER_80C", label: "Other 80C Investment" },
   ],
   "80D": [
     { value: "SELF_FAMILY", label: "Self & Family Health Insurance" },
+    { value: "SELF_SENIOR", label: "Self Health Insurance - Senior Citizen" },
     { value: "PARENTS", label: "Parents Health Insurance" },
+    { value: "PARENTS_SENIOR", label: "Parents Health Insurance - Senior" },
     { value: "PREVENTIVE_CHECKUP", label: "Preventive Health Checkup" },
+  ],
+  "HRA": [
+    { value: "RENT_PAID", label: "Rent Paid During the Year" },
+  ],
+  "HOME_LOAN_INTEREST": [
+    { value: "SELF_OCCUPIED", label: "Self-Occupied Property" },
+    { value: "LET_OUT", label: "Let-Out/Rented Property" },
+  ],
+  "80G": [
+    { value: "100_PERCENT", label: "100% Deduction" },
+    { value: "50_PERCENT", label: "50% Deduction" },
+    { value: "WITH_LIMIT", label: "With Qualifying Limit" },
   ],
 };
 

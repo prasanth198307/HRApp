@@ -45,44 +45,73 @@ import {
 } from "@/components/ui/form";
 import type { TaxDeclaration, TaxDeclarationItem } from "@shared/schema";
 
-// Old Regime - All deductions available
+// Old Regime (Form 12BB) - All deductions available
 const OLD_REGIME_CATEGORIES = [
-  { value: "80C", label: "Section 80C", limit: 150000, description: "PPF, ELSS, LIC, NSC, ULIP, Tuition Fees, Home Loan Principal, etc." },
-  { value: "80CCD", label: "Section 80CCD(1B) - NPS", limit: 50000, description: "Additional NPS contribution by employee" },
-  { value: "80D", label: "Section 80D (Medical)", limit: 100000, description: "Health Insurance Premium for self, family & parents" },
-  { value: "80E", label: "Section 80E", limit: null, description: "Education Loan Interest (no limit)" },
-  { value: "80G", label: "Section 80G", limit: null, description: "Donations to charitable institutions" },
-  { value: "HRA", label: "HRA Exemption", limit: null, description: "House Rent Allowance exemption" },
-  { value: "LTA", label: "LTA", limit: null, description: "Leave Travel Allowance" },
-  { value: "OTHER", label: "Other Deductions", limit: null, description: "Section 24(b) Home Loan Interest, Professional Tax, etc." },
+  { value: "HRA", label: "HRA - House Rent Allowance", limit: null, description: "Exemption under Section 10(13A) - requires rent receipts, landlord PAN if rent > Rs.1L/year" },
+  { value: "LTA", label: "LTA - Leave Travel Allowance", limit: null, description: "Exemption under Section 10(5) - domestic travel only, 2 journeys in 4 years" },
+  { value: "HOME_LOAN_INTEREST", label: "Home Loan Interest - Section 24(b)", limit: 200000, description: "Interest on home loan - up to Rs.2L for self-occupied property" },
+  { value: "80C", label: "Section 80C Investments", limit: 150000, description: "PPF, ELSS, LIC, NSC, Tax Saver FD, Tuition Fees, Home Loan Principal, Sukanya Samriddhi" },
+  { value: "80CCD_EMPLOYEE", label: "Section 80CCD(1B) - Employee NPS", limit: 50000, description: "Additional NPS contribution by employee (over and above 80C)" },
+  { value: "80CCD_EMPLOYER", label: "Section 80CCD(2) - Employer NPS", limit: null, description: "Employer's contribution to NPS (up to 10% of Basic + DA)" },
+  { value: "80D", label: "Section 80D - Health Insurance", limit: 100000, description: "Medical insurance for self (Rs.25K), parents (Rs.50K for senior citizens)" },
+  { value: "80DD", label: "Section 80DD - Disabled Dependent", limit: 125000, description: "Medical expenses for disabled dependent - Rs.75K or Rs.1.25L for severe disability" },
+  { value: "80DDB", label: "Section 80DDB - Medical Treatment", limit: 100000, description: "Treatment of specified diseases - Rs.40K or Rs.1L for senior citizens" },
+  { value: "80E", label: "Section 80E - Education Loan Interest", limit: null, description: "Interest on education loan - no limit, available for 8 years" },
+  { value: "80EE", label: "Section 80EE/80EEA - First Home Buyer", limit: 150000, description: "Additional deduction for first-time home buyers" },
+  { value: "80G", label: "Section 80G - Donations", limit: null, description: "Donations to registered charitable institutions" },
+  { value: "80GG", label: "Section 80GG - Rent (No HRA)", limit: 60000, description: "For those not receiving HRA from employer" },
+  { value: "80TTA", label: "Section 80TTA/80TTB - Savings Interest", limit: 50000, description: "Interest on savings - Rs.10K (80TTA) or Rs.50K for seniors (80TTB)" },
+  { value: "80U", label: "Section 80U - Person with Disability", limit: 125000, description: "Self disability - Rs.75K or Rs.1.25L for severe disability" },
+  { value: "OTHER", label: "Other Deductions", limit: null, description: "Professional tax, other allowances as applicable" },
 ] as const;
 
-// New Regime - Only limited deductions available as per Govt rules
+// New Regime (Section 115BAC) - Only these deductions allowed as per Government
 const NEW_REGIME_CATEGORIES = [
-  { value: "80CCD", label: "Section 80CCD(2) - Employer NPS", limit: null, description: "Employer's NPS contribution (up to 14% of salary for Govt, 10% for Pvt)" },
-  { value: "OTHER", label: "Other Allowed Exemptions", limit: null, description: "Agniveer Corpus, Transport allowances for disabled, etc." },
+  { value: "80CCD_EMPLOYER", label: "Section 80CCD(2) - Employer NPS Contribution", limit: null, description: "Employer's contribution to NPS - up to 14% of salary (Govt) or 10% (Private)" },
+  { value: "AGNIVEER", label: "Section 80CCH - Agniveer Corpus Fund", limit: null, description: "Contribution to Agniveer Corpus Fund under Agnipath Scheme" },
+  { value: "HOME_LOAN_INTEREST_LET_OUT", label: "Home Loan Interest (Let-Out Property Only)", limit: null, description: "Interest on home loan for rented/let-out property only - NOT for self-occupied" },
+  { value: "FAMILY_PENSION", label: "Family Pension Deduction", limit: 25000, description: "Section 57(iia) - Deduction for family pension received, up to Rs.25,000" },
+  { value: "TRANSPORT_DISABLED", label: "Transport Allowance (Disabled)", limit: null, description: "Transport allowance for specially-abled employees" },
+  { value: "GRATUITY", label: "Gratuity Exemption", limit: 2000000, description: "Exemption on gratuity received (subject to limits)" },
+  { value: "LEAVE_ENCASHMENT", label: "Leave Encashment Exemption", limit: 2500000, description: "Exemption on leave encashment at retirement" },
 ] as const;
 
-// Combined for display purposes
-const TAX_CATEGORIES = OLD_REGIME_CATEGORIES;
+// Combined for display purposes (used for lookups)
+const TAX_CATEGORIES = [...OLD_REGIME_CATEGORIES, ...NEW_REGIME_CATEGORIES];
 
 const CATEGORY_SUBTYPES: Record<string, { value: string; label: string }[]> = {
   "80C": [
     { value: "PPF", label: "Public Provident Fund (PPF)" },
     { value: "ELSS", label: "ELSS Mutual Funds" },
     { value: "LIC", label: "Life Insurance Premium" },
-    { value: "ULIP", label: "ULIP" },
+    { value: "ULIP", label: "Unit Linked Insurance Plan" },
     { value: "NSC", label: "National Savings Certificate" },
-    { value: "TAX_SAVER_FD", label: "Tax Saver Fixed Deposit" },
-    { value: "TUITION", label: "Tuition Fees" },
-    { value: "HOME_LOAN_PRINCIPAL", label: "Home Loan Principal" },
+    { value: "TAX_SAVER_FD", label: "5-Year Tax Saver Fixed Deposit" },
+    { value: "TUITION", label: "Children's Tuition Fees" },
+    { value: "HOME_LOAN_PRINCIPAL", label: "Home Loan Principal Repayment" },
     { value: "SUKANYA", label: "Sukanya Samriddhi Yojana" },
+    { value: "SCSS", label: "Senior Citizens Savings Scheme" },
+    { value: "EPF", label: "Employee Provident Fund (EPF)" },
     { value: "OTHER_80C", label: "Other 80C Investment" },
   ],
   "80D": [
-    { value: "SELF_FAMILY", label: "Self & Family Health Insurance" },
-    { value: "PARENTS", label: "Parents Health Insurance" },
-    { value: "PREVENTIVE_CHECKUP", label: "Preventive Health Checkup" },
+    { value: "SELF_FAMILY", label: "Self & Family Health Insurance (up to Rs.25K)" },
+    { value: "SELF_SENIOR", label: "Self Health Insurance - Senior Citizen (up to Rs.50K)" },
+    { value: "PARENTS", label: "Parents Health Insurance (up to Rs.25K)" },
+    { value: "PARENTS_SENIOR", label: "Parents Health Insurance - Senior (up to Rs.50K)" },
+    { value: "PREVENTIVE_CHECKUP", label: "Preventive Health Checkup (Rs.5K within limit)" },
+  ],
+  "HRA": [
+    { value: "RENT_PAID", label: "Rent Paid During the Year" },
+  ],
+  "HOME_LOAN_INTEREST": [
+    { value: "SELF_OCCUPIED", label: "Self-Occupied Property (up to Rs.2L)" },
+    { value: "LET_OUT", label: "Let-Out/Rented Property (no limit)" },
+  ],
+  "80G": [
+    { value: "100_PERCENT", label: "100% Deduction (PM Relief Fund, etc.)" },
+    { value: "50_PERCENT", label: "50% Deduction (Other charitable institutions)" },
+    { value: "WITH_LIMIT", label: "With Qualifying Limit (10% of Gross Total Income)" },
   ],
 };
 
@@ -332,25 +361,38 @@ export default function TaxDeclarationsPage() {
           
           {declaration?.taxRegime === "new" ? (
             <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-              <p className="font-medium text-blue-700 dark:text-blue-300 mb-2">New Tax Regime (Default from FY 2024-25)</p>
-              <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
-                <li>Lower tax slabs with rates from 5% to 30%</li>
-                <li>Standard deduction of Rs.75,000 (automatic)</li>
-                <li>Only employer NPS contribution (80CCD(2)) allowed - up to 14% of salary</li>
-                <li>No deductions for 80C, 80D, HRA, LTA, 80G, Home Loan Interest</li>
-                <li>Best for employees with fewer investments</li>
-              </ul>
+              <p className="font-medium text-blue-700 dark:text-blue-300 mb-2">New Tax Regime - Section 115BAC (Default from FY 2024-25)</p>
+              <div className="text-sm text-blue-600 dark:text-blue-400 space-y-2">
+                <p className="font-medium">Allowed Deductions Only:</p>
+                <ul className="space-y-1 list-disc list-inside">
+                  <li>Standard Deduction: Rs.75,000 (automatic - no declaration needed)</li>
+                  <li>Employer NPS Contribution - 80CCD(2): up to 14% of salary (Govt) / 10% (Private)</li>
+                  <li>Agniveer Corpus Fund - 80CCH</li>
+                  <li>Home Loan Interest: ONLY for let-out/rented property</li>
+                  <li>Family Pension Deduction: up to Rs.25,000</li>
+                  <li>Transport Allowance: for disabled employees only</li>
+                  <li>Gratuity & Leave Encashment exemptions</li>
+                </ul>
+                <p className="mt-2 text-amber-600 dark:text-amber-400 font-medium">NOT Allowed: 80C, 80D, HRA, LTA, 80E, 80G, Home Loan Interest (self-occupied)</p>
+              </div>
             </div>
           ) : (
             <div className="p-3 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-              <p className="font-medium text-green-700 dark:text-green-300 mb-2">Old Tax Regime</p>
-              <ul className="text-sm text-green-600 dark:text-green-400 space-y-1 list-disc list-inside">
-                <li>All deductions available: 80C (Rs.1.5L), 80D (Health Insurance), HRA, LTA</li>
-                <li>Home Loan Interest deduction u/s 24(b) - up to Rs.2L</li>
-                <li>Section 80E (Education Loan), 80G (Donations)</li>
-                <li>NPS deduction u/s 80CCD(1B) - additional Rs.50,000</li>
-                <li>Best for employees with significant investments and deductions</li>
-              </ul>
+              <p className="font-medium text-green-700 dark:text-green-300 mb-2">Old Tax Regime - Form 12BB</p>
+              <div className="text-sm text-green-600 dark:text-green-400 space-y-2">
+                <p className="font-medium">All Deductions Available:</p>
+                <ul className="space-y-1 list-disc list-inside">
+                  <li>HRA - House Rent Allowance (Section 10(13A))</li>
+                  <li>LTA - Leave Travel Allowance (Section 10(5))</li>
+                  <li>Home Loan Interest - Section 24(b): up to Rs.2L for self-occupied</li>
+                  <li>Section 80C: Rs.1.5L (PPF, ELSS, LIC, NSC, Tuition, Home Loan Principal)</li>
+                  <li>Section 80CCD(1B): Additional Rs.50K for NPS</li>
+                  <li>Section 80D: Health Insurance (Rs.25K self + Rs.50K parents senior)</li>
+                  <li>Section 80E: Education Loan Interest (no limit)</li>
+                  <li>Section 80G: Donations to charitable institutions</li>
+                  <li>And more: 80DD, 80DDB, 80EE, 80GG, 80TTA, 80U</li>
+                </ul>
+              </div>
             </div>
           )}
         </CardContent>

@@ -31,7 +31,12 @@ export const documentTypeEnum = pgEnum("document_type", ["offer_letter", "appoin
 export const taxDeclarationStatusEnum = pgEnum("tax_declaration_status", ["draft", "submitted", "verified"]);
 export const taxRegimeEnum = pgEnum("tax_regime", ["old", "new"]);
 export const taxDeductionCategoryEnum = pgEnum("tax_deduction_category", [
-  "80C", "80CCD", "80D", "80E", "80G", "HRA", "LTA", "OTHER"
+  // Old Regime categories
+  "HRA", "LTA", "HOME_LOAN_INTEREST", "80C", "80CCD_EMPLOYEE", "80CCD_EMPLOYER", 
+  "80D", "80DD", "80DDB", "80E", "80EE", "80G", "80GG", "80TTA", "80U", "OTHER",
+  // New Regime categories
+  "AGNIVEER", "HOME_LOAN_INTEREST_LET_OUT", "FAMILY_PENSION", "TRANSPORT_DISABLED", 
+  "GRATUITY", "LEAVE_ENCASHMENT"
 ]);
 
 // Organizations table
