@@ -2336,5 +2336,359 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== TAX DECLARATIONS ====================
+
+  // Helper function to get current financial year
+  function getCurrentFinancialYear(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-indexed
+    // Financial year in India starts from April
+    if (month >= 3) { // April onwards
+      return `${year}-${year + 1}`;
+    } else {
+      return `${year - 1}-${year}`;
+    }
+  }
+
+  // Employee: Get my tax declarations
+  app.get("/api/employee/tax-declarations", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+      const declarations = await storage.getTaxDeclarationsByEmployee(req.appUser!.employeeId);
+      res.json(declarations);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee: Get or create declaration for current financial year
+  app.get("/api/employee/tax-declarations/current", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const financialYear = getCurrentFinancialYear();
+      let declaration = await storage.getTaxDeclarationByEmployeeAndYear(req.appUser!.employeeId, financialYear);
+
+      // If no declaration exists, create one
+      if (!declaration) {
+        declaration = await storage.createTaxDeclaration({
+          employeeId: req.appUser!.employeeId,
+          organizationId: req.appUser!.organizationId!,
+          financialYear,
+          status: "draft",
+          totalDeclared: "0",
+        });
+      }
+
+      // Get items for this declaration
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+
+      res.json({ declaration, items });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee: Get specific declaration with items
+  app.get("/api/employee/tax-declarations/:id", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.employeeId !== req.appUser!.employeeId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      res.json({ declaration, items });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee: Add item to declaration (only if draft)
+  app.post("/api/employee/tax-declarations/:id/items", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.employeeId !== req.appUser!.employeeId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "draft") {
+        return res.status(400).json({ message: "Cannot modify submitted declaration" });
+      }
+
+      const { category, subType, description, amountDeclared, providerName, policyNumber } = req.body;
+
+      const item = await storage.createTaxDeclarationItem({
+        declarationId: declaration.id,
+        category,
+        subType: subType || null,
+        description: description || null,
+        amountDeclared: amountDeclared.toString(),
+        providerName: providerName || null,
+        policyNumber: policyNumber || null,
+      });
+
+      // Update total declared
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      const total = items.reduce((sum, i) => sum + parseFloat(i.amountDeclared), 0);
+      await storage.updateTaxDeclaration(declaration.id, { totalDeclared: total.toString() });
+
+      res.json(item);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee: Update item in declaration (only if draft)
+  app.patch("/api/employee/tax-declarations/:id/items/:itemId", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.employeeId !== req.appUser!.employeeId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "draft") {
+        return res.status(400).json({ message: "Cannot modify submitted declaration" });
+      }
+
+      const item = await storage.getTaxDeclarationItem(req.params.itemId);
+      if (!item || item.declarationId !== declaration.id) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      const { category, subType, description, amountDeclared, providerName, policyNumber } = req.body;
+
+      const updated = await storage.updateTaxDeclarationItem(req.params.itemId, {
+        category: category || item.category,
+        subType: subType !== undefined ? subType : item.subType,
+        description: description !== undefined ? description : item.description,
+        amountDeclared: amountDeclared !== undefined ? amountDeclared.toString() : item.amountDeclared,
+        providerName: providerName !== undefined ? providerName : item.providerName,
+        policyNumber: policyNumber !== undefined ? policyNumber : item.policyNumber,
+      });
+
+      // Update total declared
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      const total = items.reduce((sum, i) => sum + parseFloat(i.amountDeclared), 0);
+      await storage.updateTaxDeclaration(declaration.id, { totalDeclared: total.toString() });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee: Delete item from declaration (only if draft)
+  app.delete("/api/employee/tax-declarations/:id/items/:itemId", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.employeeId !== req.appUser!.employeeId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "draft") {
+        return res.status(400).json({ message: "Cannot modify submitted declaration" });
+      }
+
+      const item = await storage.getTaxDeclarationItem(req.params.itemId);
+      if (!item || item.declarationId !== declaration.id) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      await storage.deleteTaxDeclarationItem(req.params.itemId);
+
+      // Update total declared
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      const total = items.reduce((sum, i) => sum + parseFloat(i.amountDeclared), 0);
+      await storage.updateTaxDeclaration(declaration.id, { totalDeclared: total.toString() });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Employee: Submit declaration for verification
+  app.post("/api/employee/tax-declarations/:id/submit", requireAuth, requireOrgMember, async (req, res) => {
+    try {
+      if (!req.appUser!.employeeId) {
+        return res.status(400).json({ message: "No employee profile linked" });
+      }
+
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.employeeId !== req.appUser!.employeeId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "draft") {
+        return res.status(400).json({ message: "Declaration already submitted" });
+      }
+
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      if (items.length === 0) {
+        return res.status(400).json({ message: "Cannot submit empty declaration" });
+      }
+
+      const updated = await storage.updateTaxDeclaration(declaration.id, {
+        status: "submitted",
+      });
+
+      // Update submittedAt via raw update
+      await storage.updateTaxDeclaration(declaration.id, {
+        status: "submitted",
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Org Admin: Get all declarations for organization
+  app.get("/api/org/tax-declarations", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const year = req.query.year as string | undefined;
+      const declarations = await storage.getTaxDeclarationsByOrg(req.appUser!.organizationId!, year);
+      
+      // Fetch employee details for each declaration
+      const declarationsWithEmployees = await Promise.all(
+        declarations.map(async (dec) => {
+          const employee = await storage.getEmployee(dec.employeeId);
+          return {
+            ...dec,
+            employee: employee ? {
+              id: employee.id,
+              employeeCode: employee.employeeCode,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              department: employee.department,
+            } : null,
+          };
+        })
+      );
+
+      res.json(declarationsWithEmployees);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Org Admin: Get specific declaration with items
+  app.get("/api/org/tax-declarations/:id", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      const employee = await storage.getEmployee(declaration.employeeId);
+
+      res.json({
+        declaration,
+        items,
+        employee: employee ? {
+          id: employee.id,
+          employeeCode: employee.employeeCode,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          department: employee.department,
+          designation: employee.designation,
+        } : null,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Org Admin: Verify declaration
+  app.post("/api/org/tax-declarations/:id/verify", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "submitted") {
+        return res.status(400).json({ message: "Can only verify submitted declarations" });
+      }
+
+      const { approvedItems, remarks } = req.body;
+
+      // Update approved amounts for each item if provided
+      if (approvedItems && Array.isArray(approvedItems)) {
+        for (const { itemId, amountApproved } of approvedItems) {
+          await storage.updateTaxDeclarationItem(itemId, {
+            amountApproved: amountApproved.toString(),
+          });
+        }
+      }
+
+      // Calculate total approved
+      const items = await storage.getTaxDeclarationItems(declaration.id);
+      const totalApproved = items.reduce((sum, item) => {
+        const approved = item.amountApproved ? parseFloat(item.amountApproved) : parseFloat(item.amountDeclared);
+        return sum + approved;
+      }, 0);
+
+      const updated = await storage.updateTaxDeclaration(declaration.id, {
+        status: "verified",
+        totalApproved: totalApproved.toString(),
+        verifiedBy: req.appUser!.id,
+        remarks: remarks || null,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Org Admin: Send declaration back to draft (request changes)
+  app.post("/api/org/tax-declarations/:id/request-changes", requireAuth, requireOrgAdmin, async (req, res) => {
+    try {
+      const declaration = await storage.getTaxDeclaration(req.params.id);
+      if (!declaration || declaration.organizationId !== req.appUser!.organizationId) {
+        return res.status(404).json({ message: "Declaration not found" });
+      }
+
+      if (declaration.status !== "submitted") {
+        return res.status(400).json({ message: "Can only request changes on submitted declarations" });
+      }
+
+      const { remarks } = req.body;
+
+      const updated = await storage.updateTaxDeclaration(declaration.id, {
+        status: "draft",
+        remarks: remarks || "Please review and resubmit your declaration",
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   return httpServer;
 }
