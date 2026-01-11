@@ -37,7 +37,7 @@ export async function setupAuth(app: Express): Promise<void> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.NODE_ENV === "production" && process.env.NODE_HTTPS !== "false",
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000,
         sameSite: "lax",
