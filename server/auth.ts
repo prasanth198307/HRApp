@@ -31,7 +31,7 @@ export async function setupAuth(app: Express): Promise<void> {
       store: new PgSession({
         pool,
         tableName: "sessions",
-        createTableIfMissing: false,
+        createTableIfMissing: true,
       }),
       secret: sessionSecret,
       resave: false,
