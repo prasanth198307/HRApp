@@ -98,6 +98,14 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       (req.session as any).userId = user.id;
+      
+      // Explicitly save session to ensure it persists
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
       res.json({
         user: {
@@ -138,6 +146,14 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       (req.session as any).userId = user.id;
+      
+      // Explicitly save session to ensure it persists
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
       let organization = null;
       if (user.organizationId) {
@@ -229,6 +245,14 @@ export function registerAuthRoutes(app: Express): void {
       }) as AppUser;
 
       (req.session as any).userId = user.id;
+      
+      // Explicitly save session to ensure it persists
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
       res.json({
         user: {
