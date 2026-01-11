@@ -26,6 +26,9 @@ export async function setupAuth(app: Express): Promise<void> {
     connectionString: process.env.DATABASE_URL,
   });
 
+  const isSecure = process.env.NODE_HTTPS === "true";
+  console.log(`[Auth] Session config: secure=${isSecure}, NODE_HTTPS=${process.env.NODE_HTTPS}, NODE_ENV=${process.env.NODE_ENV}`);
+
   app.use(
     session({
       store: new PgSession({
@@ -37,10 +40,10 @@ export async function setupAuth(app: Express): Promise<void> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_HTTPS === "true",
+        secure: isSecure,
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: process.env.NODE_HTTPS === "true" ? "lax" : "lax",
+        sameSite: "lax",
       },
     })
   );
