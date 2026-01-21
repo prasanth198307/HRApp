@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -247,22 +248,74 @@ export default function Employees() {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const employees = results.data as Record<string, string>[];
-        if (employees.length === 0) {
-          toast({ title: "No valid data found in file", variant: "destructive" });
-          return;
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      // Handle Excel file
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+          
+          // Map Excel column headers to expected field names
+          const employees = (jsonData as Record<string, any>[]).map(row => {
+            const mapped: Record<string, string> = {};
+            Object.keys(row).forEach(key => {
+              // Remove asterisks and extra info from column headers
+              const cleanKey = key.replace(/\*|\s*\(.*\)/g, '').trim();
+              const fieldMap: Record<string, string> = {
+                'Employee Code': 'employeeCode',
+                'First Name': 'firstName',
+                'Last Name': 'lastName',
+                'Email': 'email',
+                'Date of Joining': 'dateOfJoining',
+                'Phone': 'phone',
+                'Department': 'department',
+                'Designation': 'designation',
+                'Salary': 'salary',
+                'Address': 'address',
+                'Emergency Contact': 'emergencyContact',
+              };
+              const mappedKey = fieldMap[cleanKey] || cleanKey;
+              mapped[mappedKey] = String(row[key] || '');
+            });
+            return mapped;
+          });
+          
+          if (employees.length === 0) {
+            toast({ title: "No valid data found in file", variant: "destructive" });
+            return;
+          }
+          setUploadResults(null);
+          bulkUploadMutation.mutate(employees);
+        } catch (error: any) {
+          toast({ title: "Failed to parse Excel file", description: error.message, variant: "destructive" });
         }
-        setUploadResults(null);
-        bulkUploadMutation.mutate(employees);
-      },
-      error: (error) => {
-        toast({ title: "Failed to parse CSV file", description: error.message, variant: "destructive" });
-      }
-    });
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // Handle CSV file
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const employees = results.data as Record<string, string>[];
+          if (employees.length === 0) {
+            toast({ title: "No valid data found in file", variant: "destructive" });
+            return;
+          }
+          setUploadResults(null);
+          bulkUploadMutation.mutate(employees);
+        },
+        error: (error) => {
+          toast({ title: "Failed to parse CSV file", description: error.message, variant: "destructive" });
+        }
+      });
+    }
     event.target.value = "";
   };
 
@@ -367,24 +420,25 @@ export default function Employees() {
               </DialogHeader>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Upload a CSV file with employee data. Download the template below to see the required format.
+                  Upload an Excel or CSV file with employee data. Download the template below to see the required format.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <a href="/employee_template.csv" download="employee_template.csv">
+                  <a href="/api/templates/employee-upload" download="employee_upload_template.xlsx">
                     <Button variant="outline" size="sm" data-testid="button-download-template">
                       <Download className="mr-2 h-4 w-4" />
-                      Download Template
+                      Download Excel Template
                     </Button>
                   </a>
                 </div>
                 <div className="border rounded-md p-4">
                   <Input
                     type="file"
-                    accept=".csv"
+                    accept=".xlsx,.xls,.csv"
                     onChange={handleFileUpload}
                     disabled={bulkUploadMutation.isPending}
-                    data-testid="input-csv-file"
+                    data-testid="input-employee-file"
                   />
+                  <p className="text-xs text-muted-foreground mt-2">Supported formats: Excel (.xlsx, .xls) or CSV (.csv)</p>
                 </div>
                 {bulkUploadMutation.isPending && (
                   <p className="text-sm text-muted-foreground">Uploading employees...</p>

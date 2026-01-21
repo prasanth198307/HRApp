@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 import { storage } from "./storage";
 import type { AppUser } from "@shared/schema";
@@ -163,6 +164,80 @@ export async function registerRoutes(
       appUser: req.appUser,
       organization: req.appUser?.organization || null,
     });
+  });
+
+  // Download employee upload template (Excel)
+  app.get("/api/templates/employee-upload", (req, res) => {
+    const templateData = [
+      {
+        "Employee Code*": "EMP001",
+        "First Name*": "John",
+        "Last Name*": "Doe",
+        "Email*": "john.doe@example.com",
+        "Date of Joining* (YYYY-MM-DD)": "2024-01-15",
+        "Phone": "+91 9876543210",
+        "Department": "Engineering",
+        "Designation": "Software Engineer",
+        "Salary": 50000,
+        "Address": "123 Main Street, City",
+        "Emergency Contact": "Jane Doe - +91 9876543211"
+      },
+      {
+        "Employee Code*": "EMP002",
+        "First Name*": "Jane",
+        "Last Name*": "Smith",
+        "Email*": "jane.smith@example.com",
+        "Date of Joining* (YYYY-MM-DD)": "2024-02-01",
+        "Phone": "+91 9876543212",
+        "Department": "HR",
+        "Designation": "HR Manager",
+        "Salary": 60000,
+        "Address": "456 Oak Avenue, City",
+        "Emergency Contact": "John Smith - +91 9876543213"
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    
+    // Set column widths
+    worksheet['!cols'] = [
+      { wch: 15 }, // Employee Code
+      { wch: 15 }, // First Name
+      { wch: 15 }, // Last Name
+      { wch: 30 }, // Email
+      { wch: 25 }, // Date of Joining
+      { wch: 18 }, // Phone
+      { wch: 15 }, // Department
+      { wch: 20 }, // Designation
+      { wch: 12 }, // Salary
+      { wch: 30 }, // Address
+      { wch: 30 }, // Emergency Contact
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+
+    // Add instructions sheet
+    const instructions = [
+      { "Instructions": "Fill in employee details following the format shown in the Employees sheet" },
+      { "Instructions": "Fields marked with * are required" },
+      { "Instructions": "Employee Code: Unique identifier for each employee (e.g., EMP001, HR002)" },
+      { "Instructions": "Date of Joining: Use format YYYY-MM-DD (e.g., 2024-01-15)" },
+      { "Instructions": "Email: Must be a valid email address" },
+      { "Instructions": "Salary: Enter numeric value only (no currency symbols)" },
+      { "Instructions": "Phone: Include country code (e.g., +91 9876543210)" },
+      { "Instructions": "" },
+      { "Instructions": "After filling, save the file and upload it in the Bulk Upload section" },
+    ];
+    const instrSheet = XLSX.utils.json_to_sheet(instructions);
+    instrSheet['!cols'] = [{ wch: 70 }];
+    XLSX.utils.book_append_sheet(workbook, instrSheet, "Instructions");
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=employee_upload_template.xlsx');
+    res.send(buffer);
   });
 
   // Change own password (for any logged-in user)
